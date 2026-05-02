@@ -133,6 +133,7 @@ function Copy-UpdateFiles($SourceDir, $TargetDir) {
 
 try {
   Set-Step "resolving app directory '$AppDir'"
+  $AppDir = $AppDir.Trim().Trim('"', "'")
   $resolvedAppDir = (Resolve-Path -LiteralPath $AppDir).Path
   Write-Info "App directory: $resolvedAppDir"
 

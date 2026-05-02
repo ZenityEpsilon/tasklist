@@ -33,7 +33,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%APP_DIR%update.ps1" -AppDir "%APP_DIR%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%APP_DIR%update.ps1"
 
 echo Starting Tasklist server...
 echo Admin URL: %APP_URL%
