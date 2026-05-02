@@ -37,6 +37,28 @@ function Normalize-Version($Version) {
   return $Version.Trim().TrimStart('v', 'V')
 }
 
+function Normalize-GitHubRepo($Repo) {
+  if ([string]::IsNullOrWhiteSpace($Repo)) {
+    return ''
+  }
+
+  $value = $Repo.Trim().Trim('"', "'")
+
+  if ($value -match '^git@github\.com:(?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
+    return "$($Matches.owner)/$($Matches.repo)"
+  }
+
+  if ($value -match '^https?://github\.com/(?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?/?$') {
+    return "$($Matches.owner)/$($Matches.repo)"
+  }
+
+  if ($value -match '^(?<owner>[^/\s]+)/(?<repo>[^/\s]+?)(?:\.git)?$') {
+    return "$($Matches.owner)/$($Matches.repo)"
+  }
+
+  throw "GitHub repo must be 'owner/repo', a GitHub HTTPS URL, or a git@github.com SSH URL."
+}
+
 function New-AuthHeaders($Token) {
   $headers = @{
     Accept = 'application/vnd.github+json'
@@ -108,6 +130,7 @@ try {
     exit 0
   }
 
+  $repo = Normalize-GitHubRepo $repo
   $assetPattern = Get-ConfigValue $localConfig 'assetPattern' '*.zip'
   $token = $env:TASKLIST_GITHUB_TOKEN
 
@@ -151,7 +174,13 @@ try {
   }
 
   $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('tasklist-update-' + [guid]::NewGuid().ToString('N'))
-  $archivePath = Join-Path $tempRoot $asset.name
+  $assetFileName = [System.IO.Path]::GetFileName($asset.name)
+  if ([string]::IsNullOrWhiteSpace($assetFileName) -or $assetFileName.IndexOfAny([System.IO.Path]::GetInvalidFileNameChars()) -ge 0) {
+    Write-Info "Release asset has an invalid file name: $($asset.name)"
+    exit 0
+  }
+
+  $archivePath = Join-Path $tempRoot $assetFileName
   $extractPath = Join-Path $tempRoot 'extract'
 
   New-Item -ItemType Directory -Path $tempRoot, $extractPath | Out-Null

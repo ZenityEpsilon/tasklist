@@ -67,6 +67,8 @@ Create `update-config.local.json` next to `start.cmd`:
 }
 ```
 
+The `repo` value can also be written as `git@github.com:ZenityEpsilon/tasklist.git` or `https://github.com/ZenityEpsilon/tasklist`.
+
 For a private repository, provide a token with access to the repository and releases. Either create `update-token.txt` next to `start.cmd`, or set an environment variable:
 
 ```powershell
