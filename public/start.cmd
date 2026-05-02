@@ -7,7 +7,7 @@ set "PORT=%PORT%"
 if "%PORT%"=="" set "PORT=8080"
 set "APP_URL=http://localhost:%PORT%/"
 set "OBS_URL=http://localhost:%PORT%/obs"
-set "NBK_PARENT_PID="
+set "TASKLIST_PARENT_PID="
 
 where node >nul 2>nul
 if errorlevel 1 (
@@ -19,13 +19,13 @@ if errorlevel 1 (
 
 cd /d "%APP_DIR%"
 
-for /f %%P in ('powershell -NoProfile -Command "$parent=(Get-CimInstance Win32_Process -Filter \"ProcessId=$PID\").ParentProcessId; Write-Output $parent" 2^>nul') do set "NBK_PARENT_PID=%%P"
+for /f %%P in ('powershell -NoProfile -Command "$parent=(Get-CimInstance Win32_Process -Filter \"ProcessId=$PID\").ParentProcessId; Write-Output $parent" 2^>nul') do set "TASKLIST_PARENT_PID=%%P"
 
 powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort %PORT% -State Listen -ErrorAction SilentlyContinue) { exit 1 }"
 if errorlevel 1 (
-  echo NBK List is already running, or port %PORT% is used by another app.
+  echo Tasklist is already running, or port %PORT% is used by another app.
   echo.
-  echo Close the other NBK List console window first.
+  echo Close the other Tasklist console window first.
   echo If you need another port, run this file with PORT set to a free value.
   echo Example: set PORT=8081
   echo.
@@ -35,7 +35,7 @@ if errorlevel 1 (
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%APP_DIR%update.ps1" -AppDir "%APP_DIR%"
 
-echo Starting NBK List server...
+echo Starting Tasklist server...
 echo Admin URL: %APP_URL%
 echo OBS URL: %OBS_URL%
 

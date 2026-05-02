@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('.', import.meta.url));
 const statePath = join(root, 'sync-state.json');
 const port = Number(process.env.PORT || 8080);
-const launcherPid = Number(process.env.NBK_PARENT_PID || process.ppid || 0);
+const launcherPid = Number(process.env.TASKLIST_PARENT_PID || process.env.NBK_PARENT_PID || process.ppid || 0);
 const clients = new Set();
 
 let state = loadState();
@@ -47,8 +47,8 @@ const server = createServer((request, response) => {
 server.on('error', error => {
   if (error.code === 'EADDRINUSE') {
     console.error('');
-    console.error(`Cannot start NBK List: port ${port} is already in use.`);
-    console.error('Close the other NBK List console window first, or use a different PORT value.');
+    console.error(`Cannot start Tasklist: port ${port} is already in use.`);
+    console.error('Close the other Tasklist console window first, or use a different PORT value.');
     console.error(`Example: PORT=8081 node server.js`);
     console.error('');
     process.exit(1);
@@ -58,7 +58,7 @@ server.on('error', error => {
 });
 
 server.listen(port, () => {
-  console.log(`NBK list sync server: http://localhost:${port}`);
+  console.log(`Tasklist sync server: http://localhost:${port}`);
 });
 
 if (launcherPid > 0) {

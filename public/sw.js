@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nbk-list-v2';
+const CACHE_NAME = 'tasklist-v2';
 const APP_SHELL = [
   './',
   './index.html',

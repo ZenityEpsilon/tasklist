@@ -41,7 +41,7 @@ function New-AuthHeaders($Token) {
   $headers = @{
     Accept = 'application/vnd.github+json'
     'X-GitHub-Api-Version' = '2022-11-28'
-    'User-Agent' = 'NBK-List-Updater'
+    'User-Agent' = 'Tasklist-Updater'
   }
 
   if (-not [string]::IsNullOrWhiteSpace($Token)) {
@@ -89,7 +89,11 @@ function Copy-UpdateFiles($SourceDir, $TargetDir) {
 try {
   $resolvedAppDir = (Resolve-Path -LiteralPath $AppDir).Path
   $localConfig = Read-JsonFile (Join-Path $resolvedAppDir 'update-config.local.json')
-  $repo = $env:NBK_GITHUB_REPO
+  $repo = $env:TASKLIST_GITHUB_REPO
+
+  if ([string]::IsNullOrWhiteSpace($repo)) {
+    $repo = $env:NBK_GITHUB_REPO
+  }
 
   if ([string]::IsNullOrWhiteSpace($repo)) {
     $repo = Get-ConfigValue $localConfig 'repo'
@@ -105,7 +109,11 @@ try {
   }
 
   $assetPattern = Get-ConfigValue $localConfig 'assetPattern' '*.zip'
-  $token = $env:NBK_GITHUB_TOKEN
+  $token = $env:TASKLIST_GITHUB_TOKEN
+
+  if ([string]::IsNullOrWhiteSpace($token)) {
+    $token = $env:NBK_GITHUB_TOKEN
+  }
 
   if ([string]::IsNullOrWhiteSpace($token)) {
     $token = $env:GITHUB_TOKEN
@@ -142,7 +150,7 @@ try {
     exit 0
   }
 
-  $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('nbk-list-update-' + [guid]::NewGuid().ToString('N'))
+  $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('tasklist-update-' + [guid]::NewGuid().ToString('N'))
   $archivePath = Join-Path $tempRoot $asset.name
   $extractPath = Join-Path $tempRoot 'extract'
 

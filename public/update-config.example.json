@@ -1,4 +1,4 @@
 {
-  "repo": "owner/private-repo",
-  "assetPattern": "*.zip"
+  "repo": "ZenityEpsilon/tasklist",
+  "assetPattern": "tasklist-*.zip"
 }
