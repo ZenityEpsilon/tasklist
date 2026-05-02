@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.idea/
+__MACOSX/
+*.iml
+.env
+.env.*
+update-config.local.json
+update-token.txt
+*.update-bak
+dist.rar
+nbk-list-*.zip

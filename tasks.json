@@ -1,0 +1,92 @@
+[
+  {
+    "id": "e6304a31-e184-4434-a478-c25841def30a",
+    "title": "АирСоком Wise Forest",
+    "qty": 1,
+    "icons": [
+      "RU_MECH",
+      "US_SOF"
+    ],
+    "done": false
+  },
+  {
+    "id": "9cfbae5e-f2aa-4338-9999-1c42b68a66a3",
+    "title": "Freimann Береги+Шилки",
+    "qty": 1,
+    "icons": [
+      "RU_MOTOSTRELKI",
+      "RU_MECH"
+    ],
+    "done": false
+  },
+  {
+    "id": "186663b8-2ed3-4113-a049-d317f2d01988",
+    "title": "F1reRain VDV",
+    "qty": 2,
+    "icons": [
+      "RU_VDV",
+      "RU_MECH"
+    ],
+    "done": false
+  },
+  {
+    "id": "ce48240f-182d-432b-a176-a1c85162e1b8",
+    "title": "МАРИН+СОКОМ Mirror",
+    "qty": 1,
+    "icons": [
+      "US_MARINES",
+      "US_SOF"
+    ],
+    "done": false
+  },
+  {
+    "id": "cadcba7d-8a6d-498d-a93a-64a6a17850fe",
+    "title": "ТАНКВДВЧУГУН",
+    "qty": 2,
+    "icons": [
+      "RU_TANK",
+      "RU_VDV"
+    ],
+    "done": false
+  },
+  {
+    "id": "e955115c-ebe8-4eba-83c7-95cedc92c20e",
+    "title": "ЯКОРЬВДВ ВЕРТОРАШ",
+    "qty": 2,
+    "icons": [
+      "RU_VDV",
+      "RU_MORSKAYA"
+    ],
+    "done": false
+  },
+  {
+    "id": "cf408954-2dd1-49ee-8eb5-a3627e416ad3",
+    "title": "ПЕХОТНАЯ РФ",
+    "qty": 2,
+    "icons": [
+      "RU_MOTOSTRELKI",
+      "RU_MECH"
+    ],
+    "done": false
+  },
+  {
+    "id": "a58a69b9-ff49-4392-b6be-627cac86b1aa",
+    "title": "ВДВ+МОРЕ Mirror",
+    "qty": 1,
+    "icons": [
+      "RU_VDV",
+      "RU_MORSKAYA"
+    ],
+    "done": false
+  },
+  {
+    "id": "08d93dff-4811-42a4-ac2b-326bc4cd1f68",
+    "title": "Балтиец эйфория",
+    "qty": 2,
+    "icons": [
+      "RU_MECH",
+      "RU_MECH"
+    ],
+    "done": false
+  }
+]

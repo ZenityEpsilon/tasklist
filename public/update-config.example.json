@@ -1,0 +1,4 @@
+{
+  "repo": "owner/private-repo",
+  "assetPattern": "*.zip"
+}

@@ -1,0 +1,22 @@
+{
+  "name": "Список заказов",
+  "short_name": "Заказы",
+  "description": "PWA-список заказов с количеством и специализациями",
+  "author": "Зеновий Крупский",
+  "contacts": {
+    "telegram": "https://t.me/zenoviyKrupskyi"
+  },
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
