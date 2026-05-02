@@ -137,6 +137,7 @@ try {
   $resolvedAppDir = (Resolve-Path -LiteralPath $AppDir).Path
   Write-Info "App directory: $resolvedAppDir"
 
+  $defaultConfig = Read-JsonFile (Join-Path $resolvedAppDir 'update-config.json')
   $localConfig = Read-JsonFile (Join-Path $resolvedAppDir 'update-config.local.json')
   Set-Step 'reading repository setting'
   $repo = $env:TASKLIST_GITHUB_REPO
@@ -147,6 +148,10 @@ try {
 
   if ([string]::IsNullOrWhiteSpace($repo)) {
     $repo = Get-ConfigValue $localConfig 'repo'
+  }
+
+  if ([string]::IsNullOrWhiteSpace($repo)) {
+    $repo = Get-ConfigValue $defaultConfig 'repo'
   }
 
   if ([string]::IsNullOrWhiteSpace($repo)) {
@@ -162,7 +167,7 @@ try {
   Write-Info "Repository: $repo"
 
   Set-Step 'reading asset pattern'
-  $assetPattern = Get-ConfigValue $localConfig 'assetPattern' '*.zip'
+  $assetPattern = Get-ConfigValue $localConfig 'assetPattern' (Get-ConfigValue $defaultConfig 'assetPattern' '*.zip')
   Write-Info "Asset pattern: $assetPattern"
 
   Set-Step 'reading GitHub token'

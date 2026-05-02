@@ -58,7 +58,7 @@ start.cmd
 
 `start.cmd` runs `update.ps1` before starting the server. The updater checks the latest GitHub Release, compares it with local `VERSION`, downloads the matching zip asset, and replaces the app files.
 
-Create `update-config.local.json` next to `start.cmd`:
+The default release includes `update-config.json`:
 
 ```json
 {
@@ -67,7 +67,7 @@ Create `update-config.local.json` next to `start.cmd`:
 }
 ```
 
-The `repo` value can also be written as `git@github.com:ZenityEpsilon/tasklist.git` or `https://github.com/ZenityEpsilon/tasklist`.
+Users do not need to change this for the public repository. For custom builds, create `update-config.local.json` next to `start.cmd`; it overrides the bundled config. The `repo` value can also be written as `git@github.com:ZenityEpsilon/tasklist.git` or `https://github.com/ZenityEpsilon/tasklist`.
 
 For a private repository, provide a token with access to the repository and releases. Either create `update-token.txt` next to `start.cmd`, or set an environment variable:
 
