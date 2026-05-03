@@ -191,15 +191,50 @@ function readBody(request) {
 }
 
 function parsePayload(payload) {
-  if (!payload || !Array.isArray(payload.orders)) {
-    throw new Error('Payload must contain orders array');
+  if (!payload) {
+    throw new Error('Payload must contain state');
+  }
+
+  if (Array.isArray(payload.games)) {
+    const games = payload.games
+      .filter(game => game && typeof game === 'object')
+      .map((game, index) => ({
+        id: game.id || `game-${index + 1}`,
+        name: String(game.name || `Game ${index + 1}`),
+        orders: Array.isArray(game.orders) ? game.orders : []
+      }));
+
+    if (games.length === 0) {
+      throw new Error('Payload must contain at least one game');
+    }
+
+    return {
+      version: 3,
+      sourceId: payload.sourceId || 'server',
+      revision: Number(payload.revision) || Date.now(),
+      games,
+      activeGameId: games.some(game => game.id === payload.activeGameId)
+        ? payload.activeGameId
+        : games[0].id
+    };
+  }
+
+  if (!Array.isArray(payload.orders)) {
+    throw new Error('Payload must contain games or orders array');
   }
 
   return {
-    version: 2,
+    version: 3,
     sourceId: payload.sourceId || 'server',
     revision: Number(payload.revision) || Date.now(),
-    orders: payload.orders
+    games: [
+      {
+        id: 'default-game',
+        name: 'Игра',
+        orders: payload.orders
+      }
+    ],
+    activeGameId: 'default-game'
   };
 }
 
@@ -211,10 +246,17 @@ function loadState() {
   } catch {}
 
   return {
-    version: 2,
+    version: 3,
     sourceId: 'server',
     revision: 0,
-    orders: []
+    games: [
+      {
+        id: 'default-game',
+        name: 'Игра',
+        orders: []
+      }
+    ],
+    activeGameId: 'default-game'
   };
 }
 

@@ -1,5 +1,11 @@
-<script setup>
+﻿<script setup>
 import { computed, ref, watch } from 'vue';
+import AppFooter from './components/AppFooter.vue';
+import AppHeader from './components/AppHeader.vue';
+import EmptyState from './components/EmptyState.vue';
+import GameTabs from './components/GameTabs.vue';
+import OrderForm from './components/OrderForm.vue';
+import OrdersList from './components/OrdersList.vue';
 
 const STORAGE_KEY = 'stream-orders-v7';
 const STORAGE_CHANNEL = 'stream-orders-sync-v1';
@@ -36,27 +42,25 @@ const ICONS = [
 
 const ICON_BY_ID = Object.fromEntries(ICONS.map(icon => [icon.id, icon]));
 
+const DEFAULT_GAME_NAME = 'Игра';
 const defaultOrders = [
-  { title: 'АирСоком Wise Forest', qty: 1, icons: ['RU_MECH', 'US_SOF'] },
-  { title: 'Freimann Береги+Шилки', qty: 1, icons: ['RU_MOTOSTRELKI', 'RU_MECH'] },
-  { title: 'F1reRain VDV', qty: 2, icons: ['RU_VDV', 'RU_MECH'] },
-  { title: 'Марин+Соком Mirror', qty: 1, icons: ['US_MARINES', 'US_SOF'] },
-  { title: 'ТанкВДВЧугун', qty: 2, icons: ['RU_TANK', 'RU_VDV'] },
-  { title: 'ЯкорьВДВ Вертораш', qty: 2, icons: ['RU_VDV', 'RU_MORSKAYA'] },
-  { title: 'Пехотная РФ', qty: 2, icons: ['RU_MOTOSTRELKI', 'RU_MECH'] },
-  { title: 'ВДВ+Море Mirror', qty: 1, icons: ['RU_VDV', 'RU_MORSKAYA'] },
-  { title: 'Балтиец эйфория', qty: 2, icons: ['RU_MECH', 'RU_MECH'] }
+  { title: 'Тестовая задача x1', qty: 1, icons: ['RU_MECH', 'US_SOF'] },
+  { title: 'Пример заказа x2', qty: 2, icons: ['RU_VDV', 'RU_MORSKAYA'] }
 ];
 
 const input = ref('');
 const qtyInput = ref(1);
+const gameInput = ref('');
 const filter = ref('all');
 const openedPicker = ref(null);
 const draggedId = ref(null);
 const dragOverId = ref(null);
-const fileInput = ref(null);
+const draggedSourceGameId = ref(null);
+const dragOverGameId = ref(null);
 const loadedState = load();
-const orders = ref(loadedState.orders);
+const games = ref(loadedState.games);
+const activeGameId = ref(loadedState.activeGameId);
+const selectedGameId = ref(loadedState.activeGameId);
 const completingOverlayIds = ref(new Set());
 let lastRevision = loadedState.revision;
 let isApplyingRemoteState = false;
@@ -64,9 +68,27 @@ let lastRawStorage = localStorage.getItem(STORAGE_KEY) || '';
 let syncChannel = null;
 let serverPushTimer = null;
 let serverSyncAvailable = false;
-let previousOverlayDone = new Map(orders.value.map(order => [order.id, Boolean(order.done)]));
 const overlayCompletionTimers = new Map();
 
+const activeGame = computed(() => {
+  return games.value.find(game => game.id === activeGameId.value) || games.value[0] || null;
+});
+const selectedGame = computed(() => {
+  return games.value.find(game => game.id === selectedGameId.value) || activeGame.value || games.value[0] || null;
+});
+const currentGame = computed(() => {
+  return isOverlayMode ? activeGame.value : selectedGame.value;
+});
+const orders = computed({
+  get() {
+    return currentGame.value?.orders || [];
+  },
+  set(value) {
+    if (currentGame.value) {
+      currentGame.value.orders = value;
+    }
+  }
+});
 const visibleOrders = computed(() => {
   if (filter.value === 'active') return orders.value.filter(order => !order.done);
   if (filter.value === 'done') return orders.value.filter(order => order.done);
@@ -83,12 +105,13 @@ const activeCount = computed(() => orders.value.filter(order => !order.done).len
 const qtyCount = computed(() => {
   return orders.value.reduce((sum, order) => sum + normalizeQty(order.qty), 0);
 });
+let previousOverlayDone = new Map(orders.value.map(order => [order.id, Boolean(order.done)]));
 
 watch(
-  orders,
-  value => {
+  [games, activeGameId],
+  () => {
     if (isApplyingRemoteState) return;
-    persistOrders(value);
+    persistState();
   },
   { deep: true, flush: 'sync' }
 );
@@ -116,6 +139,65 @@ function addOrder() {
 
   input.value = '';
   qtyInput.value = 1;
+}
+
+function addGame() {
+  const name = gameInput.value.trim();
+  if (!name) return;
+
+  const game = makeGame(name, []);
+  games.value.push(game);
+  selectedGameId.value = game.id;
+  gameInput.value = '';
+  resetTaskUiState();
+}
+
+function selectGame(id) {
+  if (selectedGameId.value === id) return;
+
+  selectedGameId.value = id;
+  resetTaskUiState();
+}
+
+function setActiveGame(id) {
+  if (activeGameId.value === id) return;
+
+  activeGameId.value = id;
+}
+
+function finishGameEditing(game) {
+  const name = game.name.trim();
+  game.name = name || DEFAULT_GAME_NAME;
+}
+
+function removeGame(id) {
+  if (games.value.length <= 1) return;
+
+  const index = games.value.findIndex(game => game.id === id);
+  if (index < 0) return;
+
+  games.value.splice(index, 1);
+
+  if (activeGameId.value === id) {
+    activeGameId.value = games.value[Math.max(0, index - 1)]?.id || games.value[0]?.id || null;
+  }
+
+  if (selectedGameId.value === id) {
+    selectedGameId.value = activeGameId.value || games.value[0]?.id || null;
+    resetTaskUiState();
+  }
+}
+
+function resetTaskUiState() {
+  filter.value = 'all';
+  selectedGameId.value = normalizeGameId(selectedGameId.value);
+  activeGameId.value = normalizeGameId(activeGameId.value);
+  openedPicker.value = null;
+  draggedId.value = null;
+  dragOverId.value = null;
+  draggedSourceGameId.value = null;
+  dragOverGameId.value = null;
+  previousOverlayDone = new Map(orders.value.map(order => [order.id, Boolean(order.done)]));
 }
 
 function setFilter(value) {
@@ -225,11 +307,6 @@ function finishEditing(order) {
   }
 }
 
-function commitOnEnter(event) {
-  event.preventDefault();
-  event.currentTarget.blur();
-}
-
 function togglePicker(orderId, index) {
   const next = `${orderId}:${index}`;
   openedPicker.value = openedPicker.value === next ? null : next;
@@ -248,10 +325,6 @@ function iconPath(iconId) {
   return `${import.meta.env.BASE_URL}icons/${getIcon(iconId).file}`;
 }
 
-function openFileDialog() {
-  fileInput.value?.click();
-}
-
 function loadJson(event) {
   const file = event.target.files?.[0];
   event.target.value = '';
@@ -264,11 +337,10 @@ function loadJson(event) {
     try {
       const data = JSON.parse(reader.result);
 
-      if (!Array.isArray(data)) {
-        throw new Error('JSON должен быть массивом');
-      }
-
-      orders.value = data.map(normalizeLoadedOrder);
+      const importedState = parseStoredState(data);
+      games.value = importedState.games;
+      activeGameId.value = importedState.activeGameId;
+      resetTaskUiState();
     } catch {
       alert('Не удалось загрузить JSON');
     }
@@ -277,13 +349,8 @@ function loadJson(event) {
   reader.readAsText(file, 'UTF-8');
 }
 
-function persistOrders(value) {
-  const payload = {
-    version: 2,
-    sourceId: TAB_ID,
-    revision: Date.now(),
-    orders: value
-  };
+function persistState() {
+  const payload = makePayload(Date.now());
 
   lastRawStorage = JSON.stringify(payload);
   const plainPayload = JSON.parse(lastRawStorage);
@@ -294,6 +361,16 @@ function persistOrders(value) {
     syncChannel?.postMessage(plainPayload);
   }
   scheduleServerPush(plainPayload);
+}
+
+function makePayload(revision) {
+  return {
+    version: 3,
+    sourceId: TAB_ID,
+    revision,
+    games: games.value,
+    activeGameId: activeGameId.value
+  };
 }
 
 function setupCrossTabSync() {
@@ -335,19 +412,23 @@ function syncFromLocalStorage() {
 }
 
 function applyRemotePayload(payload) {
+  const state = normalizeStatePayload(payload);
+
   if (
-    !payload ||
-    payload.sourceId === TAB_ID ||
-    payload.revision <= lastRevision ||
-    !Array.isArray(payload.orders)
+    !state ||
+    state.sourceId === TAB_ID ||
+    state.revision <= lastRevision
   ) {
     return;
   }
 
-  lastRevision = payload.revision;
+  lastRevision = state.revision;
   isApplyingRemoteState = true;
-  orders.value = payload.orders.map(normalizeLoadedOrder);
+  games.value = state.games;
+  activeGameId.value = state.activeGameId;
+  selectedGameId.value = normalizeGameId(selectedGameId.value);
   isApplyingRemoteState = false;
+  resetTaskUiState();
 }
 
 function setupServerSync() {
@@ -366,12 +447,7 @@ function setupServerSync() {
       if (payload.revision > lastRevision) {
         applyRemotePayload(payload);
       } else {
-        scheduleServerPush({
-          version: 2,
-          sourceId: TAB_ID,
-          revision: lastRevision,
-          orders: orders.value
-        });
+        scheduleServerPush(makePayload(lastRevision));
       }
 
       setupServerEvents();
@@ -430,7 +506,7 @@ async function pushToServer(payload) {
 
 async function saveJson() {
   try {
-    const json = JSON.stringify(orders.value, null, 2);
+    const json = JSON.stringify(makePayload(Date.now()), null, 2);
 
     if (window.showSaveFilePicker) {
       const handle = await window.showSaveFilePicker({
@@ -472,6 +548,7 @@ async function saveJson() {
 
 function onDragStart(order) {
   draggedId.value = order.id;
+  draggedSourceGameId.value = currentGame.value?.id || null;
   closeIconMenus();
 }
 
@@ -485,6 +562,8 @@ function onDrop(targetOrder) {
   const fromId = draggedId.value;
   draggedId.value = null;
   dragOverId.value = null;
+  draggedSourceGameId.value = null;
+  dragOverGameId.value = null;
 
   if (!fromId || fromId === targetOrder.id) return;
 
@@ -499,9 +578,41 @@ function onDrop(targetOrder) {
   orders.value = current;
 }
 
+function onGameDragEnter(game) {
+  if (!draggedId.value || game.id === draggedSourceGameId.value) {
+    dragOverGameId.value = null;
+    return;
+  }
+
+  dragOverGameId.value = game.id;
+}
+
+function onGameDrop(targetGame) {
+  const orderId = draggedId.value;
+  const sourceGameId = draggedSourceGameId.value;
+
+  draggedId.value = null;
+  dragOverId.value = null;
+  draggedSourceGameId.value = null;
+  dragOverGameId.value = null;
+
+  if (!orderId || !sourceGameId || targetGame.id === sourceGameId) return;
+
+  const sourceGame = games.value.find(game => game.id === sourceGameId);
+  if (!sourceGame) return;
+
+  const sourceIndex = sourceGame.orders.findIndex(order => order.id === orderId);
+  if (sourceIndex < 0) return;
+
+  const [movedOrder] = sourceGame.orders.splice(sourceIndex, 1);
+  targetGame.orders.unshift(movedOrder);
+}
+
 function onDragEnd() {
   draggedId.value = null;
   dragOverId.value = null;
+  draggedSourceGameId.value = null;
+  dragOverGameId.value = null;
 }
 
 function makeOrder(title, qty = 1, icons = null) {
@@ -598,6 +709,31 @@ function normalizeLoadedOrder(order) {
   };
 }
 
+function makeGame(name = DEFAULT_GAME_NAME, orders = []) {
+  return {
+    id: createId(),
+    name: normalizeGameName(name),
+    orders: orders.map(normalizeLoadedOrder)
+  };
+}
+
+function normalizeLoadedGame(game, index = 0) {
+  return {
+    id: game?.id || createId(),
+    name: normalizeGameName(game?.name || (index === 0 ? DEFAULT_GAME_NAME : `Игра ${index + 1}`)),
+    orders: Array.isArray(game?.orders) ? game.orders.map(normalizeLoadedOrder) : []
+  };
+}
+
+function normalizeGameName(name) {
+  const normalized = String(name || '').trim();
+  return normalized || DEFAULT_GAME_NAME;
+}
+
+function normalizeGameId(id) {
+  return games.value.some(game => game.id === id) ? id : games.value[0]?.id || null;
+}
+
 function createId() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -615,191 +751,141 @@ function load() {
     }
   } catch {}
 
-  return {
-    revision: 0,
-    orders: defaultOrders.map(order => makeOrder(order.title, order.qty, order.icons))
-  };
+  return makeDefaultState();
 }
 
 function parseStoredState(raw) {
   const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  return normalizeStatePayload(data);
+}
+
+function normalizeStatePayload(data) {
+  if (!data) {
+    throw new Error('Invalid stored state payload');
+  }
 
   if (Array.isArray(data)) {
+    return makeStateFromOrders(data, 0, null);
+  }
+
+  if (Array.isArray(data?.games)) {
+    const normalizedGames = data.games.map(normalizeLoadedGame).filter(game => game.name);
+    const fallbackGames = normalizedGames.length > 0
+      ? normalizedGames
+      : [makeGame(DEFAULT_GAME_NAME, [])];
+    const activeId = fallbackGames.some(game => game.id === data.activeGameId)
+      ? data.activeGameId
+      : fallbackGames[0].id;
+
     return {
-      revision: 0,
-      sourceId: null,
-      orders: data.map(normalizeLoadedOrder)
+      revision: Number(data.revision) || 0,
+      sourceId: data.sourceId || null,
+      games: fallbackGames,
+      activeGameId: activeId
     };
   }
 
   if (Array.isArray(data?.orders)) {
-    return {
-      revision: Number(data.revision) || 0,
-      sourceId: data.sourceId || null,
-      orders: data.orders.map(normalizeLoadedOrder)
-    };
+    return makeStateFromOrders(data.orders, Number(data.revision) || 0, data.sourceId || null);
   }
 
-  throw new Error('Invalid stored orders payload');
+  throw new Error('Invalid stored state payload');
+}
+
+function makeStateFromOrders(rawOrders, revision, sourceId) {
+  const game = makeGame(DEFAULT_GAME_NAME, rawOrders);
+
+  return {
+    revision,
+    sourceId,
+    games: [game],
+    activeGameId: game.id
+  };
+}
+
+function makeDefaultState() {
+  const game = makeGame(DEFAULT_GAME_NAME, defaultOrders.map(order => makeOrder(order.title, order.qty, order.icons)));
+
+  return {
+    revision: 0,
+    sourceId: null,
+    games: [game],
+    activeGameId: game.id
+  };
 }
 
 </script>
 
 <template>
   <main class="widget" :class="{ overlay: isOverlayMode }" @click="closeIconMenus">
-    <div v-if="!isOverlayMode" class="top">
-      <h1>Список заказов</h1>
-      <div class="counter">
-        <span>{{ activeCount }}</span>/<span>{{ totalCount }}</span>
-        · шт: <span>{{ qtyCount }}</span>
-      </div>
-    </div>
+    <AppHeader
+      v-if="!isOverlayMode"
+      :title="currentGame?.name || DEFAULT_GAME_NAME"
+      :active-count="activeCount"
+      :total-count="totalCount"
+      :qty-count="qtyCount"
+    />
 
-    <form v-if="!isOverlayMode" class="form" @submit.prevent="addOrder">
-      <input
-        v-model="input"
-        class="input"
-        type="text"
-        placeholder="Новый заказ"
-        autocomplete="off"
-      />
-      <input
-        v-model.number="qtyInput"
-        class="qty-input"
-        type="number"
-        min="1"
-        step="1"
-        title="Количество"
-      />
-      <button class="add" type="submit">+</button>
-    </form>
+    <GameTabs
+      v-if="!isOverlayMode"
+      :games="games"
+      :active-game-id="activeGameId"
+      :selected-game-id="selectedGameId"
+      :dragged-id="draggedId"
+      :dragged-source-game-id="draggedSourceGameId"
+      :drag-over-game-id="dragOverGameId"
+      :game-input="gameInput"
+      @update:game-input="gameInput = $event"
+      @add-game="addGame"
+      @select-game="selectGame"
+      @set-active-game="setActiveGame"
+      @finish-game-editing="finishGameEditing"
+      @remove-game="removeGame"
+      @drag-enter-game="onGameDragEnter"
+      @drop-game="onGameDrop"
+    />
 
-    <div class="orders">
-      <article
-        v-for="order in displayOrders"
-        :key="order.id"
-        class="order"
-        :class="{
-          done: order.done,
-          'menu-open': openedPicker?.startsWith(`${order.id}:`),
-          'overlay-completing': completingOverlayIds.has(order.id),
-          dragging: draggedId === order.id,
-          'drag-over': dragOverId === order.id
-        }"
-        :draggable="!isOverlayMode"
-        @dragstart="onDragStart(order)"
-        @dragenter.prevent="onDragEnter(order)"
-        @dragover.prevent
-        @drop.prevent="onDrop(order)"
-        @dragend="onDragEnd"
-        @animationend="onOverlayAnimationEnd(order, $event)"
-      >
-        <button v-if="!isOverlayMode" class="drag" type="button" title="Перетащить"></button>
-        <button v-if="!isOverlayMode" class="check" type="button" @click="toggleDone(order)">✓</button>
+    <OrderForm
+      v-if="!isOverlayMode"
+      v-model:input="input"
+      v-model:qty-input="qtyInput"
+      @add-order="addOrder"
+    />
 
-        <div class="icons" @click.stop>
-          <div
-            v-for="(iconId, index) in order.icons"
-            :key="`${order.id}-${index}`"
-            class="icon-picker"
-            :class="{ open: openedPicker === `${order.id}:${index}` }"
-          >
-            <button
-              class="icon-main"
-              type="button"
-              :disabled="isOverlayMode"
-              @click="!isOverlayMode && togglePicker(order.id, index)"
-            >
-              <img :src="iconPath(iconId)" alt="" />
-            </button>
-            <div v-if="!isOverlayMode" class="icon-menu">
-              <button
-                v-for="icon in ICONS"
-                :key="icon.id"
-                class="icon-option"
-                :class="{ active: icon.id === iconId }"
-                type="button"
-                @click="setIcon(order, index, icon.id)"
-              >
-                <img :src="iconPath(icon.id)" alt="" />
-                <span>{{ icon.label }}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+    <OrdersList
+      :orders="displayOrders"
+      :icons="ICONS"
+      :is-overlay-mode="isOverlayMode"
+      :opened-picker="openedPicker"
+      :completing-overlay-ids="completingOverlayIds"
+      :dragged-id="draggedId"
+      :drag-over-id="dragOverId"
+      :icon-path="iconPath"
+      @drag-start="onDragStart"
+      @drag-enter="onDragEnter"
+      @drop="onDrop"
+      @drag-end="onDragEnd"
+      @overlay-animation-end="onOverlayAnimationEnd"
+      @toggle-done="toggleDone"
+      @toggle-picker="togglePicker"
+      @set-icon="setIcon"
+      @finish-editing="finishEditing"
+      @update-qty="updateQty"
+      @remove-order="removeOrder"
+    />
 
-        <span v-if="isOverlayMode" class="text text-view">{{ order.title }}</span>
-        <input
-          v-else
-          v-model="order.title"
-          class="text"
-          type="text"
-          spellcheck="false"
-          @blur="finishEditing(order)"
-          @keydown.enter="commitOnEnter"
-        />
+    <EmptyState :visible="displayOrders.length === 0" />
 
-        <span v-if="isOverlayMode" class="qty qty-view">{{ order.qty }}</span>
-        <input
-          v-else
-          v-model.number="order.qty"
-          class="qty"
-          type="number"
-          min="1"
-          step="1"
-          @change="updateQty(order)"
-        />
-        <button v-if="!isOverlayMode" class="delete" type="button" @click="removeOrder(order.id)">×</button>
-      </article>
-    </div>
-
-    <div class="empty" :class="{ visible: displayOrders.length === 0 }">Пусто</div>
-
-    <div v-if="!isOverlayMode" class="footer">
-      <div>
-        <button
-          class="filter"
-          :class="{ active: filter === 'all' }"
-          type="button"
-          @click="setFilter('all')"
-        >
-          Все
-        </button>
-        <button
-          class="filter"
-          :class="{ active: filter === 'active' }"
-          type="button"
-          @click="setFilter('active')"
-        >
-          Актив
-        </button>
-        <button
-          class="filter"
-          :class="{ active: filter === 'done' }"
-          type="button"
-          @click="setFilter('done')"
-        >
-          Готово
-        </button>
-      </div>
-
-      <button class="clear" type="button" @click="clearDone">Очистить</button>
-
-      <div class="file-actions">
-        <input
-          ref="fileInput"
-          class="file-input"
-          type="file"
-          accept=".json,application/json"
-          @change="loadJson"
-        />
-        <button class="file-btn" type="button" @click="openFileDialog">Загрузить JSON</button>
-        <button class="file-btn" type="button" @click="saveJson">Сохранить JSON</button>
-        <a class="file-btn" :href="overlayUrl" target="_blank" rel="noreferrer">OBS</a>
-        <a class="contact-link" :href="CONTACT_URL" target="_blank" rel="noreferrer">
-          {{ AUTHOR_NAME }}
-        </a>
-      </div>
-    </div>
+    <AppFooter
+      v-if="!isOverlayMode"
+      :filter="filter"
+      :overlay-url="overlayUrl"
+      :author-name="AUTHOR_NAME"
+      :contact-url="CONTACT_URL"
+      @set-filter="setFilter"
+      @clear-done="clearDone"
+      @load-json="loadJson"
+      @save-json="saveJson"
+    />
   </main>
 </template>
