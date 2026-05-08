@@ -201,6 +201,7 @@ function parsePayload(payload) {
       .map((game, index) => ({
         id: game.id || `game-${index + 1}`,
         name: String(game.name || `Game ${index + 1}`),
+        settings: normalizeGameSettings(game.settings),
         orders: Array.isArray(game.orders) ? game.orders : []
       }));
 
@@ -231,6 +232,7 @@ function parsePayload(payload) {
       {
         id: 'default-game',
         name: 'Игра',
+        settings: normalizeGameSettings(),
         orders: payload.orders
       }
     ],
@@ -253,10 +255,17 @@ function loadState() {
       {
         id: 'default-game',
         name: 'Игра',
+        settings: normalizeGameSettings(),
         orders: []
       }
     ],
     activeGameId: 'default-game'
+  };
+}
+
+function normalizeGameSettings(settings = {}) {
+  return {
+    showIcons: Boolean(settings?.showIcons)
   };
 }
 
