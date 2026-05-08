@@ -79,6 +79,7 @@ const selectedGame = computed(() => {
 const currentGame = computed(() => {
   return isOverlayMode ? activeGame.value : selectedGame.value;
 });
+const currentGameSettings = computed(() => currentGame.value?.settings || makeDefaultGameSettings());
 const orders = computed({
   get() {
     return currentGame.value?.orders || [];
@@ -713,6 +714,7 @@ function makeGame(name = DEFAULT_GAME_NAME, orders = []) {
   return {
     id: createId(),
     name: normalizeGameName(name),
+    settings: makeDefaultGameSettings(),
     orders: orders.map(normalizeLoadedOrder)
   };
 }
@@ -721,7 +723,22 @@ function normalizeLoadedGame(game, index = 0) {
   return {
     id: game?.id || createId(),
     name: normalizeGameName(game?.name || (index === 0 ? DEFAULT_GAME_NAME : `Игра ${index + 1}`)),
+    settings: normalizeGameSettings(game?.settings),
     orders: Array.isArray(game?.orders) ? game.orders.map(normalizeLoadedOrder) : []
+  };
+}
+
+function makeDefaultGameSettings() {
+  return {
+    showIcons: false
+  };
+}
+
+function normalizeGameSettings(settings) {
+  return {
+    ...makeDefaultGameSettings(),
+    ...(settings && typeof settings === 'object' ? settings : {}),
+    showIcons: Boolean(settings?.showIcons)
   };
 }
 
@@ -855,6 +872,7 @@ function makeDefaultState() {
     <OrdersList
       :orders="displayOrders"
       :icons="ICONS"
+      :show-icons="currentGameSettings.showIcons"
       :is-overlay-mode="isOverlayMode"
       :opened-picker="openedPicker"
       :completing-overlay-ids="completingOverlayIds"

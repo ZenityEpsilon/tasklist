@@ -8,6 +8,10 @@ defineProps({
     type: Array,
     required: true
   },
+  showIcons: {
+    type: Boolean,
+    default: false
+  },
   isOverlayMode: {
     type: Boolean,
     default: false
@@ -62,7 +66,9 @@ function commitOnEnter(event) {
       'menu-open': openedPicker?.startsWith(`${order.id}:`),
       'overlay-completing': completingOverlayIds.has(order.id),
       dragging: draggedId === order.id,
-      'drag-over': dragOverId === order.id
+      'drag-over': dragOverId === order.id,
+      'with-icons': showIcons,
+      'without-icons': !showIcons
     }"
     :draggable="!isOverlayMode"
     @dragstart="emit('drag-start', order)"
@@ -75,7 +81,7 @@ function commitOnEnter(event) {
     <button v-if="!isOverlayMode" class="drag" type="button" title="Перетащить"></button>
     <button v-if="!isOverlayMode" class="check" type="button" @click="emit('toggle-done', order)">✓</button>
 
-    <div class="icons" @click.stop>
+    <div v-if="showIcons" class="icons" @click.stop>
       <div
         v-for="(iconId, index) in order.icons"
         :key="`${order.id}-${index}`"

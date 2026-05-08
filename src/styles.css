@@ -366,6 +366,98 @@ h1 {
     background: var(--accent);
 }
 
+.game-settings-shell {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    align-items: start;
+}
+
+.game-settings-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: max-content;
+    height: 24px;
+    padding: 0 9px;
+    border: 1px solid rgba(56, 213, 255, 0.22);
+    border-radius: 7px;
+    color: rgba(248, 250, 252, 0.8);
+    background: var(--panel-soft);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.game-settings-toggle-text {
+    white-space: nowrap;
+}
+
+.game-settings-toggle span:last-child {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 7px solid currentColor;
+    transition: transform 160ms ease;
+}
+
+.game-settings-toggle.open span:last-child {
+    transform: rotate(180deg);
+}
+
+.game-settings-toggle:hover {
+    color: #ffffff;
+    border-color: rgba(56, 213, 255, 0.44);
+    background: rgba(11, 70, 100, 0.72);
+}
+
+.game-settings {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 24px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(6, 10, 18, 0.42);
+}
+
+.game-setting {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 24px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.game-setting input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+.setting-info {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border: 1px solid rgba(56, 213, 255, 0.38);
+    border-radius: 50%;
+    color: #e9fbff;
+    background: rgba(11, 70, 100, 0.58);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: help;
+}
+
 .form {
     display: grid;
     grid-template-columns: 1fr 64px 40px;
@@ -428,7 +520,7 @@ h1 {
 .order {
     position: relative;
     display: grid;
-    grid-template-columns: 20px 30px 68px minmax(0, 1fr) 54px 30px;
+    grid-template-columns: 20px 30px minmax(0, 1fr) 54px 30px;
     align-items: center;
     gap: 6px;
     min-height: 44px;
@@ -439,6 +531,10 @@ h1 {
     background: linear-gradient(90deg, rgba(10, 80, 115, 0.58), var(--panel));
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.42);
     transition: opacity 140ms ease, transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.order.with-icons {
+    grid-template-columns: 20px 30px 68px minmax(0, 1fr) 54px 30px;
 }
 
 .order[draggable="true"] {
@@ -453,11 +549,15 @@ h1 {
 }
 
 .overlay .order {
-    grid-template-columns: 68px minmax(0, 1fr) 50px;
+    grid-template-columns: minmax(0, 1fr) 50px;
     min-height: 46px;
     padding: 7px 10px;
     pointer-events: none;
     animation: obsTaskIn 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.overlay .order.with-icons {
+    grid-template-columns: 68px minmax(0, 1fr) 50px;
 }
 
 .overlay .order.overlay-completing {
@@ -924,10 +1024,14 @@ h1 {
     }
 
     .order {
-        grid-template-columns: 18px 28px 62px minmax(0, 1fr) 48px 28px;
+        grid-template-columns: 18px 28px minmax(0, 1fr) 48px 28px;
         gap: 5px;
         min-height: 42px;
         padding: 5px 6px;
+    }
+
+    .order.with-icons {
+        grid-template-columns: 18px 28px 62px minmax(0, 1fr) 48px 28px;
     }
 
     .drag {
@@ -1007,6 +1111,14 @@ h1 {
 
     .game-add {
         width: 28px;
+    }
+
+    .game-settings-shell {
+        gap: 6px;
+    }
+
+    .game-settings-toggle {
+        max-width: 100%;
     }
 
     .clear {

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref } from 'vue';
 
-defineProps({
+const props = defineProps({
   games: {
     type: Array,
     required: true
@@ -46,12 +46,39 @@ const emit = defineEmits([
 const gamesList = ref(null);
 const gameInputElement = ref(null);
 const isGameFormOpen = ref(false);
+const isSettingsOpen = ref(false);
 const canScrollLeft = ref(false);
 const canScrollRight = ref(false);
+const selectedGame = computed(() => {
+  return props.games.find(game => game.id === props.selectedGameId) || props.games[0] || null;
+});
 const scrollClass = computed(() => ({
   'can-scroll-left': canScrollLeft.value,
   'can-scroll-right': canScrollRight.value
 }));
+
+function ensureGameSettings(game) {
+  if (!game.settings) {
+    game.settings = {};
+  }
+
+  if (typeof game.settings.showIcons !== 'boolean') {
+    game.settings.showIcons = false;
+  }
+
+  return game.settings;
+}
+
+function toggleSettings() {
+  isSettingsOpen.value = !isSettingsOpen.value;
+}
+
+function updateShowIcons(event) {
+  const game = selectedGame.value;
+  if (!game) return;
+
+  ensureGameSettings(game).showIcons = event.target.checked;
+}
 
 function updateGameInput(event) {
   emit('update:game-input', event.target.value);
@@ -193,5 +220,31 @@ onUpdated(() => {
       />
       <button class="game-add" type="button" @click="submitGameForm">+</button>
     </form>
+
+    <div class="game-settings-shell">
+      <button
+        class="game-settings-toggle"
+        :class="{ open: isSettingsOpen }"
+        type="button"
+        :aria-expanded="isSettingsOpen"
+        title="Настройки игры"
+        @click="toggleSettings"
+      >
+        <span class="game-settings-toggle-text">Настройки игры</span>
+        <span></span>
+      </button>
+
+      <div v-if="isSettingsOpen && selectedGame" class="game-settings">
+        <label class="game-setting">
+          <input
+            type="checkbox"
+            :checked="Boolean(selectedGame.settings?.showIcons)"
+            @change="updateShowIcons"
+          />
+          <span>Показывать иконки</span>
+          <span class="setting-info" title="Иконки Brocken Arrow">i</span>
+        </label>
+      </div>
+    </div>
   </section>
 </template>

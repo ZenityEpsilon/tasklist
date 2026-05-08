@@ -10,6 +10,10 @@ defineProps({
     type: Array,
     required: true
   },
+  showIcons: {
+    type: Boolean,
+    default: false
+  },
   isOverlayMode: {
     type: Boolean,
     default: false
@@ -58,6 +62,7 @@ const emit = defineEmits([
       :key="order.id"
       :order="order"
       :icons="icons"
+      :show-icons="showIcons"
       :is-overlay-mode="isOverlayMode"
       :opened-picker="openedPicker"
       :completing-overlay-ids="completingOverlayIds"
