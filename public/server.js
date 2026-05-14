@@ -8,6 +8,27 @@ const statePath = join(root, 'sync-state.json');
 const port = Number(process.env.PORT || 8080);
 const launcherPid = Number(process.env.TASKLIST_PARENT_PID || process.env.NBK_PARENT_PID || process.ppid || 0);
 const clients = new Set();
+const defaultColorProfiles = [
+  {
+    id: 'default-cyan',
+    name: 'Стандартная',
+    colors: {
+      panel: 'rgba(6, 10, 18, 0.74)',
+      panelStrong: 'rgba(8, 13, 24, 0.9)',
+      panelSoft: 'rgba(16, 24, 38, 0.72)',
+      line: 'rgba(255, 255, 255, 0.18)',
+      lineStrong: 'rgba(255, 255, 255, 0.28)',
+      text: '#ffffff',
+      muted: '#c7d2e2',
+      shadow: 'rgba(0, 0, 0, 0.7)',
+      accent: '#38d5ff',
+      accent2: '#a7f3d0',
+      danger: '#ff6b7d',
+      done: '#38ef7d'
+    }
+  }
+];
+const paletteKeys = Object.keys(defaultColorProfiles[0].colors);
 
 let state = loadState();
 
@@ -107,6 +128,7 @@ function handleState(request, response) {
       const payload = parsePayload(JSON.parse(body));
 
       if (payload.revision >= state.revision) {
+        payload.revision = Math.max(payload.revision, state.revision + 1);
         state = payload;
         saveState();
         broadcastState();
@@ -210,9 +232,10 @@ function parsePayload(payload) {
     }
 
     return {
-      version: 3,
+      version: 4,
       sourceId: payload.sourceId || 'server',
       revision: Number(payload.revision) || Date.now(),
+      appSettings: normalizeAppSettings(payload.appSettings),
       games,
       activeGameId: games.some(game => game.id === payload.activeGameId)
         ? payload.activeGameId
@@ -225,9 +248,10 @@ function parsePayload(payload) {
   }
 
   return {
-    version: 3,
+    version: 4,
     sourceId: payload.sourceId || 'server',
     revision: Number(payload.revision) || Date.now(),
+    appSettings: normalizeAppSettings(payload.appSettings),
     games: [
       {
         id: 'default-game',
@@ -248,9 +272,10 @@ function loadState() {
   } catch {}
 
   return {
-    version: 3,
+    version: 4,
     sourceId: 'server',
     revision: 0,
+    appSettings: normalizeAppSettings(),
     games: [
       {
         id: 'default-game',
@@ -264,8 +289,57 @@ function loadState() {
 }
 
 function normalizeGameSettings(settings = {}) {
+  const colorProfileId = typeof settings?.colorProfileId === 'string' ? settings.colorProfileId : '';
+
   return {
+    colorProfileId,
     showIcons: Boolean(settings?.showIcons)
+  };
+}
+
+function normalizeAppSettings(settings = {}) {
+  const defaults = makeDefaultAppSettings();
+  const profiles = Array.isArray(settings?.colorProfiles)
+    ? settings.colorProfiles.map(normalizeColorProfile).filter(profile => profile.name)
+    : [];
+  const colorProfiles = profiles.length > 0 ? profiles : defaults.colorProfiles;
+  const activeColorProfileId = colorProfiles.some(profile => profile.id === settings?.activeColorProfileId)
+    ? settings.activeColorProfileId
+    : colorProfiles[0].id;
+  const adminColorProfileId = colorProfiles.some(profile => profile.id === settings?.adminColorProfileId)
+    ? settings.adminColorProfileId
+    : '';
+
+  return {
+    activeColorProfileId,
+    adminColorProfileId,
+    colorProfiles
+  };
+}
+
+function makeDefaultAppSettings() {
+  const colorProfiles = defaultColorProfiles.map(normalizeColorProfile);
+
+  return {
+    activeColorProfileId: colorProfiles[0].id,
+    adminColorProfileId: '',
+    colorProfiles
+  };
+}
+
+function normalizeColorProfile(profile = {}, index = 0) {
+  const fallback = defaultColorProfiles[0];
+  const sourceColors = profile.colors && typeof profile.colors === 'object' ? profile.colors : {};
+  const colors = {};
+
+  paletteKeys.forEach(key => {
+    colors[key] = String(sourceColors[key] || fallback.colors[key] || '').trim();
+  });
+
+  return {
+    id: profile.id || `profile-${Date.now()}-${index}`,
+    name: String(profile.name || fallback.name || 'Палитра').trim(),
+    colors
   };
 }
 

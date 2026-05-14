@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import AppFooter from './components/AppFooter.vue';
 import AppHeader from './components/AppHeader.vue';
+import ProgramSettings from './components/ProgramSettings.vue';
 import EmptyState from './components/EmptyState.vue';
 import GameTabs from './components/GameTabs.vue';
 import OrderForm from './components/OrderForm.vue';
@@ -43,6 +44,40 @@ const ICONS = [
 const ICON_BY_ID = Object.fromEntries(ICONS.map(icon => [icon.id, icon]));
 
 const DEFAULT_GAME_NAME = 'Игра';
+const DEFAULT_COLOR_PROFILES = [
+  {
+    id: 'default-cyan',
+    name: 'Стандартная',
+    colors: {
+      panel: 'rgba(6, 10, 18, 0.74)',
+      panelStrong: 'rgba(8, 13, 24, 0.9)',
+      panelSoft: 'rgba(16, 24, 38, 0.72)',
+      line: 'rgba(255, 255, 255, 0.18)',
+      lineStrong: 'rgba(255, 255, 255, 0.28)',
+      text: '#ffffff',
+      muted: '#c7d2e2',
+      shadow: 'rgba(0, 0, 0, 0.7)',
+      accent: '#38d5ff',
+      accent2: '#a7f3d0',
+      danger: '#ff6b7d',
+      done: '#38ef7d'
+    }
+  }
+];
+const PALETTE_FIELDS = [
+  { key: 'panel', label: 'Панель' },
+  { key: 'panelStrong', label: 'Панель активная' },
+  { key: 'panelSoft', label: 'Панель мягкая' },
+  { key: 'line', label: 'Линии' },
+  { key: 'lineStrong', label: 'Линии активные' },
+  { key: 'text', label: 'Текст' },
+  { key: 'muted', label: 'Приглушенный текст' },
+  { key: 'shadow', label: 'Тень' },
+  { key: 'accent', label: 'Акцент' },
+  { key: 'accent2', label: 'Второй акцент' },
+  { key: 'danger', label: 'Удаление' },
+  { key: 'done', label: 'Готово' }
+];
 const defaultOrders = [
   { title: 'Тестовая задача x1', qty: 1, icons: ['RU_MECH', 'US_SOF'] },
   { title: 'Пример заказа x2', qty: 2, icons: ['RU_VDV', 'RU_MORSKAYA'] }
@@ -60,6 +95,7 @@ const dragOverGameId = ref(null);
 const loadedState = load();
 const games = ref(loadedState.games);
 const activeGameId = ref(loadedState.activeGameId);
+const appSettings = ref(loadedState.appSettings);
 const selectedGameId = ref(loadedState.activeGameId);
 const completingOverlayIds = ref(new Set());
 let lastRevision = loadedState.revision;
@@ -80,6 +116,20 @@ const currentGame = computed(() => {
   return isOverlayMode ? activeGame.value : selectedGame.value;
 });
 const currentGameSettings = computed(() => currentGame.value?.settings || makeDefaultGameSettings());
+const obsColorProfile = computed(() => {
+  const pinnedProfileId = currentGameSettings.value.colorProfileId;
+
+  return appSettings.value.colorProfiles.find(profile => profile.id === pinnedProfileId)
+    || appSettings.value.colorProfiles.find(profile => profile.id === appSettings.value.activeColorProfileId)
+    || appSettings.value.colorProfiles[0]
+    || makeDefaultColorProfile();
+});
+const adminColorProfile = computed(() => {
+  return appSettings.value.colorProfiles.find(profile => profile.id === appSettings.value.adminColorProfileId)
+    || makeDefaultColorProfile();
+});
+const activeColorProfile = computed(() => (isOverlayMode ? obsColorProfile.value : adminColorProfile.value));
+const paletteCssVars = computed(() => makePaletteCssVars(activeColorProfile.value.colors));
 const orders = computed({
   get() {
     return currentGame.value?.orders || [];
@@ -109,7 +159,7 @@ const qtyCount = computed(() => {
 let previousOverlayDone = new Map(orders.value.map(order => [order.id, Boolean(order.done)]));
 
 watch(
-  [games, activeGameId],
+  [games, activeGameId, appSettings],
   () => {
     if (isApplyingRemoteState) return;
     persistState();
@@ -351,7 +401,7 @@ function loadJson(event) {
 }
 
 function persistState() {
-  const payload = makePayload(Date.now());
+  const payload = makePayload(nextRevision());
 
   lastRawStorage = JSON.stringify(payload);
   const plainPayload = JSON.parse(lastRawStorage);
@@ -366,12 +416,17 @@ function persistState() {
 
 function makePayload(revision) {
   return {
-    version: 3,
+    version: 4,
     sourceId: TAB_ID,
     revision,
+    appSettings: appSettings.value,
     games: games.value,
     activeGameId: activeGameId.value
   };
+}
+
+function nextRevision() {
+  return Math.max(Date.now(), lastRevision + 1);
 }
 
 function setupCrossTabSync() {
@@ -425,6 +480,7 @@ function applyRemotePayload(payload) {
 
   lastRevision = state.revision;
   isApplyingRemoteState = true;
+  appSettings.value = state.appSettings;
   games.value = state.games;
   activeGameId.value = state.activeGameId;
   selectedGameId.value = normalizeGameId(selectedGameId.value);
@@ -730,16 +786,101 @@ function normalizeLoadedGame(game, index = 0) {
 
 function makeDefaultGameSettings() {
   return {
+    colorProfileId: '',
     showIcons: false
   };
 }
 
 function normalizeGameSettings(settings) {
+  const colorProfileId = typeof settings?.colorProfileId === 'string' ? settings.colorProfileId : '';
+
   return {
     ...makeDefaultGameSettings(),
     ...(settings && typeof settings === 'object' ? settings : {}),
+    colorProfileId,
     showIcons: Boolean(settings?.showIcons)
   };
+}
+
+function makeDefaultColorProfile() {
+  return normalizeColorProfile(DEFAULT_COLOR_PROFILES[0]);
+}
+
+function makeDefaultAppSettings() {
+  const colorProfiles = DEFAULT_COLOR_PROFILES.map(normalizeColorProfile);
+
+  return {
+    activeColorProfileId: colorProfiles[0].id,
+    adminColorProfileId: '',
+    colorProfiles
+  };
+}
+
+function normalizeAppSettings(settings) {
+  const defaults = makeDefaultAppSettings();
+  const profiles = Array.isArray(settings?.colorProfiles)
+    ? settings.colorProfiles.map(normalizeColorProfile).filter(profile => profile.name)
+    : [];
+  const colorProfiles = profiles.length > 0 ? profiles : defaults.colorProfiles;
+  const activeColorProfileId = colorProfiles.some(profile => profile.id === settings?.activeColorProfileId)
+    ? settings.activeColorProfileId
+    : colorProfiles[0].id;
+  const adminColorProfileId = colorProfiles.some(profile => profile.id === settings?.adminColorProfileId)
+    ? settings.adminColorProfileId
+    : '';
+
+  return {
+    activeColorProfileId,
+    adminColorProfileId,
+    colorProfiles
+  };
+}
+
+function normalizeColorProfile(profile) {
+  const fallback = DEFAULT_COLOR_PROFILES[0];
+  const sourceColors = profile?.colors && typeof profile.colors === 'object' ? profile.colors : {};
+  const colors = {};
+
+  PALETTE_FIELDS.forEach(field => {
+    const fallbackColor = fallback.colors[field.key];
+    colors[field.key] = normalizeCssColor(sourceColors[field.key], fallbackColor);
+  });
+
+  return {
+    id: profile?.id || createId(),
+    name: normalizeProfileName(profile?.name || fallback.name),
+    colors
+  };
+}
+
+function normalizeProfileName(name) {
+  return String(name || '').trim() || 'Палитра';
+}
+
+function normalizeCssColor(value, fallback) {
+  const color = String(value || '').trim();
+  return color ? color : fallback;
+}
+
+function makePaletteCssVars(colors) {
+  return {
+    '--panel': colors.panel,
+    '--panel-strong': colors.panelStrong,
+    '--panel-soft': colors.panelSoft,
+    '--line': colors.line,
+    '--line-strong': colors.lineStrong,
+    '--text': colors.text,
+    '--muted': colors.muted,
+    '--shadow': colors.shadow,
+    '--accent': colors.accent,
+    '--accent-2': colors.accent2,
+    '--danger': colors.danger,
+    '--done': colors.done
+  };
+}
+
+function saveAppSettings(settings) {
+  appSettings.value = normalizeAppSettings(settings);
 }
 
 function normalizeGameName(name) {
@@ -797,6 +938,7 @@ function normalizeStatePayload(data) {
     return {
       revision: Number(data.revision) || 0,
       sourceId: data.sourceId || null,
+      appSettings: normalizeAppSettings(data.appSettings),
       games: fallbackGames,
       activeGameId: activeId
     };
@@ -815,6 +957,7 @@ function makeStateFromOrders(rawOrders, revision, sourceId) {
   return {
     revision,
     sourceId,
+    appSettings: makeDefaultAppSettings(),
     games: [game],
     activeGameId: game.id
   };
@@ -826,6 +969,7 @@ function makeDefaultState() {
   return {
     revision: 0,
     sourceId: null,
+    appSettings: makeDefaultAppSettings(),
     games: [game],
     activeGameId: game.id
   };
@@ -834,7 +978,7 @@ function makeDefaultState() {
 </script>
 
 <template>
-  <main class="widget" :class="{ overlay: isOverlayMode }" @click="closeIconMenus">
+  <main class="widget" :class="{ overlay: isOverlayMode }" :style="paletteCssVars" @click="closeIconMenus">
     <AppHeader
       v-if="!isOverlayMode"
       :title="currentGame?.name || DEFAULT_GAME_NAME"
@@ -848,6 +992,7 @@ function makeDefaultState() {
       :games="games"
       :active-game-id="activeGameId"
       :selected-game-id="selectedGameId"
+      :color-profiles="appSettings.colorProfiles"
       :dragged-id="draggedId"
       :dragged-source-game-id="draggedSourceGameId"
       :drag-over-game-id="dragOverGameId"
@@ -869,7 +1014,35 @@ function makeDefaultState() {
       @add-order="addOrder"
     />
 
+    <div v-if="isOverlayMode" class="obs-orders-stage">
+      <Transition name="obs-list-page">
+        <OrdersList
+          :key="currentGame?.id || 'empty-overlay-list'"
+          :orders="displayOrders"
+          :icons="ICONS"
+          :show-icons="currentGameSettings.showIcons"
+          :is-overlay-mode="isOverlayMode"
+          :opened-picker="openedPicker"
+          :completing-overlay-ids="completingOverlayIds"
+          :dragged-id="draggedId"
+          :drag-over-id="dragOverId"
+          :icon-path="iconPath"
+          @drag-start="onDragStart"
+          @drag-enter="onDragEnter"
+          @drop="onDrop"
+          @drag-end="onDragEnd"
+          @overlay-animation-end="onOverlayAnimationEnd"
+          @toggle-done="toggleDone"
+          @toggle-picker="togglePicker"
+          @set-icon="setIcon"
+          @finish-editing="finishEditing"
+          @update-qty="updateQty"
+          @remove-order="removeOrder"
+        />
+      </Transition>
+    </div>
     <OrdersList
+      v-else
       :orders="displayOrders"
       :icons="ICONS"
       :show-icons="currentGameSettings.showIcons"
@@ -904,6 +1077,14 @@ function makeDefaultState() {
       @clear-done="clearDone"
       @load-json="loadJson"
       @save-json="saveJson"
+    />
+
+    <ProgramSettings
+      v-if="!isOverlayMode"
+      :settings="appSettings"
+      :color-fields="PALETTE_FIELDS"
+      :base-profile="makeDefaultColorProfile()"
+      @save-settings="saveAppSettings"
     />
   </main>
 </template>

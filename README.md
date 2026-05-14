@@ -1,109 +1,75 @@
-# Tasklist
+# Tasklist for OBS
 
-Tasklist is a local order list for stream/OBS workflows. The admin page edits the list, and the `/obs` page shows the overlay view. A small Node.js server keeps browser windows synchronized through HTTP and server-sent events.
+Tasklist is a local stream overlay tool for managing orders, requests, or tasks during a broadcast. You control the list from the admin panel, while OBS shows a clean overlay page that stays synchronized automatically.
 
-## Requirements
+## Features
 
-- Windows
-- Node.js 18 or newer
-- PowerShell
+- Multiple games or task categories in one workspace.
+- Separate game selection for editing and for the live OBS overlay.
+- Drag and drop tasks within a game or between games.
+- Quantity counters, completion state, and quick unit icons.
+- Per-game display settings, including icon visibility.
+- Color profiles for OBS, individual games, and the admin panel.
+- Automatic synchronization between the admin panel and OBS through a local server.
+- Local state persistence with JSON import and export.
 
-## Development
+## Quick Start
 
-Install dependencies:
+1. Install Node.js 18 or newer.
+2. Open the application folder.
+3. Run `start.cmd`.
 
-```powershell
-npm install
+The admin panel opens at:
+
+```text
+http://localhost:8080/
 ```
 
-Run the Vite dev server:
+Use this URL for the OBS browser source:
 
-```powershell
-npm run dev
+```text
+http://localhost:8080/obs
 ```
 
-Build the distributable files:
+Keep the `start.cmd` window open while using the app.
 
-```powershell
-npm run build
-```
+## OBS Setup
 
-Run the built app:
+1. Add a `Browser` source in OBS.
+2. Paste `http://localhost:8080/obs`.
+3. Set the source size you need for your scene.
+4. Manage tasks from the admin panel.
 
-```powershell
-npm run serve
-```
+Changes made in the admin panel are sent to OBS automatically.
 
-## Distribution
+## Color Profiles
 
-The ready-to-run app is built into `dist/`. Users should run:
+Open the program settings to create and edit palettes. New profiles start from the original standard palette.
 
-```cmd
-start.cmd
-```
+Profiles can be used as:
 
-By default the app starts on port `8080`:
+- the default OBS profile;
+- a pinned profile for a specific game;
+- the admin panel profile.
 
-- Admin: `http://localhost:8080/`
-- OBS overlay: `http://localhost:8080/obs`
+If a game has no pinned profile, OBS uses the default OBS profile.
 
-To use another port:
+## Changing the Port
+
+The default port is `8080`. To use another port:
 
 ```cmd
 set PORT=8081
 start.cmd
 ```
 
-## Private Release Updates
+The URLs then become:
 
-`start.cmd` runs `update.ps1` before starting the server. The updater checks the latest GitHub Release, compares it with local `VERSION`, downloads the matching zip asset, and replaces the app files.
-
-The default release includes `update-config.json`:
-
-```json
-{
-  "repo": "ZenityEpsilon/tasklist",
-  "assetPattern": "tasklist-*.zip"
-}
+```text
+http://localhost:8081/
+http://localhost:8081/obs
 ```
 
-Users do not need to change this for the public repository. For custom builds, create `update-config.local.json` next to `start.cmd`; it overrides the bundled config. The `repo` value can also be written as `git@github.com:ZenityEpsilon/tasklist.git` or `https://github.com/ZenityEpsilon/tasklist`.
+## Updates
 
-For a private repository, provide a token with access to the repository and releases. Either create `update-token.txt` next to `start.cmd`, or set an environment variable:
-
-```powershell
-$env:TASKLIST_GITHUB_TOKEN = "github_pat_..."
-```
-
-The old `NBK_GITHUB_TOKEN` and `NBK_GITHUB_REPO` names are still accepted for compatibility.
-
-## Release Checklist
-
-1. Update `public/VERSION` to the release version, for example `1.0`.
-2. Run `npm run build`.
-3. Create a zip from the contents of `dist`, not from the `dist` folder itself:
-
-```powershell
-Compress-Archive -Path dist\* -DestinationPath tasklist-1.0.zip -Force
-```
-
-4. Commit the source changes:
-
-```powershell
-git add .
-git commit -m "Release 1.0"
-```
-
-5. Create and push the tag:
-
-```powershell
-git tag -a 1.0 -m "Release 1.0"
-git push origin main
-git push origin 1.0
-```
-
-6. Create a GitHub Release for tag `1.0`.
-7. Upload `tasklist-1.0.zip` as a release asset.
-8. Verify the release is marked as the latest release.
-
-The updater uses GitHub's latest release endpoint, so a pushed git tag alone is not enough. There must be a GitHub Release with a zip asset.
+When `start.cmd` runs, the app checks for updates and installs the latest available version automatically. No extra setup is required for normal use.

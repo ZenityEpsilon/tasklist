@@ -14,6 +14,10 @@ const props = defineProps({
     type: String,
     default: null
   },
+  colorProfiles: {
+    type: Array,
+    default: () => []
+  },
   draggedId: {
     type: String,
     default: null
@@ -66,6 +70,10 @@ function ensureGameSettings(game) {
     game.settings.showIcons = false;
   }
 
+  if (typeof game.settings.colorProfileId !== 'string') {
+    game.settings.colorProfileId = '';
+  }
+
   return game.settings;
 }
 
@@ -78,6 +86,15 @@ function updateShowIcons(event) {
   if (!game) return;
 
   ensureGameSettings(game).showIcons = event.target.checked;
+}
+
+function updateColorProfile(event) {
+  const game = selectedGame.value;
+  if (!game) return;
+
+  const profileId = event.target.value;
+  const hasProfile = props.colorProfiles.some(profile => profile.id === profileId);
+  ensureGameSettings(game).colorProfileId = hasProfile ? profileId : '';
 }
 
 function updateGameInput(event) {
@@ -243,6 +260,23 @@ onUpdated(() => {
           />
           <span>Показывать иконки</span>
           <span class="setting-info" title="Иконки Brocken Arrow">i</span>
+        </label>
+        <label class="game-setting game-setting-profile">
+          <span>Цветовой профиль</span>
+          <select
+            class="game-setting-select"
+            :value="selectedGame.settings?.colorProfileId || ''"
+            @change="updateColorProfile"
+          >
+            <option value="">По умолчанию</option>
+            <option
+              v-for="profile in colorProfiles"
+              :key="profile.id"
+              :value="profile.id"
+            >
+              {{ profile.name }}
+            </option>
+          </select>
         </label>
       </div>
     </div>
