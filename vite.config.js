@@ -4,10 +4,15 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 function inlineHtmlAssets() {
+  let outDir = 'dist';
+
   return {
     name: 'inline-html-assets',
+    configResolved(config) {
+      outDir = config.build.outDir;
+    },
     closeBundle() {
-      const dist = resolve('dist');
+      const dist = resolve(outDir);
       const htmlPath = resolve(dist, 'index.html');
       if (!existsSync(htmlPath)) return;
 

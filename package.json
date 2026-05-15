@@ -1,6 +1,6 @@
 {
   "name": "tasklist",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "author": {
     "name": "Зеновий Крупский",
@@ -9,10 +9,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
-    "electron": "npm run build && electron dist/electron-main.js",
+    "build": "vite build --outDir dist-web && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-electron-portable.ps1",
+    "electron": "npm run build && dist\\Tasklist.exe",
     "preview": "vite preview --host 0.0.0.0",
-    "serve": "node dist/server.js"
+    "serve": "node dist/resources/app/server.js"
   },
   "dependencies": {
     "vue": "^3.5.33"
