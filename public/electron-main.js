@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, ipcMain, shell } from 'electron';
 import { appendFileSync } from 'node:fs';
+import os from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startTasklistServer } from './server-core.js';
@@ -11,8 +12,10 @@ let mainWindow = null;
 let server = null;
 
 app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('disable-software-rasterizer');
 
 function writeLog(message) {
   try {
@@ -30,6 +33,8 @@ process.on('unhandledRejection', error => {
 
 async function createWindow() {
   writeLog(`createWindow root=${root}`);
+  writeLog(`versions electron=${process.versions.electron} chrome=${process.versions.chrome} node=${process.versions.node}`);
+  writeLog(`platform ${process.platform} ${process.arch} os=${os.release()}`);
   mainWindow = new BrowserWindow({
     width: 560,
     height: 860,
@@ -42,7 +47,7 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       preload: join(root, 'preload.cjs'),
-      sandbox: true
+      sandbox: false
     }
   });
 

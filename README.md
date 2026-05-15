@@ -37,6 +37,20 @@ http://localhost:8080/
 
 Tasklist saves your games, tasks, and color profiles automatically on this computer. Manual import/export is not needed for normal use.
 
+## Logs
+
+If the desktop app closes immediately or does not open, check the Electron main process log:
+
+```text
+%APPDATA%\tasklist\main.log
+```
+
+On a default Windows profile this usually expands to:
+
+```text
+C:\Users\<UserName>\AppData\Roaming\tasklist\main.log
+```
+
 For source builds, you can also start the Electron admin app with:
 
 ```cmd

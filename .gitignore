@@ -10,6 +10,7 @@ __MACOSX/
 update-config.local.json
 update-token.txt
 *.update-bak
+main.log
 dist.rar
 nbk-list-*.zip
 tasklist-*.zip
