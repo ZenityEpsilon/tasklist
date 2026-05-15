@@ -67,6 +67,7 @@ button {
 }
 
 .widget {
+    position: relative;
     width: min(var(--stream-width), calc(100vw - 24px));
     max-height: calc(100vh - 24px);
     margin: 12px;
@@ -80,6 +81,11 @@ button {
     scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: rgba(56, 213, 255, 0.58) rgba(255, 255, 255, 0.08);
+}
+
+.widget.admin-shell {
+    max-height: calc(100vh - 104px);
+    margin-bottom: 92px;
 }
 
 .widget.overlay {
@@ -505,6 +511,11 @@ h1 {
     margin-top: 10px;
 }
 
+.program-settings.embedded {
+    margin-top: 0;
+    opacity: 1;
+}
+
 .program-settings-toggle {
     display: inline-flex;
     align-items: center;
@@ -565,6 +576,37 @@ h1 {
     scrollbar-gutter: stable;
     scrollbar-width: thin;
     scrollbar-color: rgba(56, 213, 255, 0.58) rgba(255, 255, 255, 0.08);
+}
+
+.program-settings.embedded .program-settings-panel {
+    max-height: none;
+    margin-top: 0;
+}
+
+.settings-page {
+    display: grid;
+    gap: 10px;
+}
+
+.settings-page-title {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.settings-page-title strong {
+    color: var(--text);
+    font-size: 18px;
+}
+
+.settings-page-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
 }
 
 .widget::-webkit-scrollbar,
@@ -1367,6 +1409,107 @@ h1 {
     margin-bottom: 0;
 }
 
+.bottom-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    display: grid;
+    grid-template-columns: 1fr 64px 1fr;
+    gap: 10px;
+    width: 100%;
+    min-height: 76px;
+    padding: 10px 18px 14px;
+    border-top: 1px solid var(--line);
+    background: rgba(6, 10, 18, 0.88);
+    box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.36);
+    backdrop-filter: blur(10px);
+}
+
+.bottom-nav-item {
+    display: grid;
+    place-items: center;
+    min-height: 46px;
+    border: 1px solid rgba(56, 213, 255, 0.22);
+    border-radius: 8px;
+    color: rgba(248, 250, 252, 0.82);
+    background: var(--panel-soft);
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.bottom-nav-item:hover,
+.bottom-nav-item.active {
+    color: #021017;
+    border-color: rgba(56, 213, 255, 0.5);
+    background: var(--accent);
+}
+
+.bottom-nav-item.play {
+    position: relative;
+    box-sizing: border-box;
+    width: 64px;
+    height: 64px;
+    min-height: 64px;
+    max-width: 64px;
+    max-height: 64px;
+    padding: 0;
+    align-self: start;
+    justify-self: center;
+    border-radius: 999px;
+    color: #021017;
+    font-size: 25px;
+    transform: translateY(-42px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.42);
+    aspect-ratio: 1;
+}
+
+.bottom-nav-item.play .play-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-top: 12px solid transparent;
+    border-bottom: 12px solid transparent;
+    border-left: 18px solid currentColor;
+    transform: translate(-42%, -50%);
+}
+
+.bottom-nav-item.play .play-icon.stop {
+    width: 19px;
+    height: 19px;
+    border: 0;
+    border-radius: 3px;
+    background: currentColor;
+    transform: translate(-50%, -50%);
+}
+
+.bottom-nav-item.play.server-off {
+    border-color: rgba(255, 132, 112, 0.72);
+    background: #ff7a66;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.42), 0 0 0 4px rgba(255, 122, 102, 0.16);
+}
+
+.bottom-nav-item.play.server-on {
+    border-color: rgba(164, 244, 194, 0.78);
+    background: #a8f5bf;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.42), 0 0 0 4px rgba(168, 245, 191, 0.16);
+}
+
+.bottom-nav-item.play:hover:not(:disabled) {
+    color: #021017;
+    filter: brightness(1.12);
+}
+
+.bottom-nav-item.play:disabled {
+    cursor: default;
+    opacity: 0.42;
+    filter: none;
+}
+
 .filter,
 .clear,
 .file-btn,
@@ -1446,6 +1589,22 @@ h1 {
         max-height: calc(100vh - 16px);
         margin: 8px;
         padding: 10px;
+    }
+
+    .widget.admin-shell {
+        max-height: calc(100vh - 92px);
+        margin-bottom: 84px;
+    }
+
+    .bottom-nav {
+        grid-template-columns: 1fr 60px 1fr;
+        min-height: 72px;
+        padding: 9px 14px 12px;
+    }
+
+    .bottom-nav-item.play {
+        width: 60px;
+        min-height: 52px;
     }
 
     .program-settings-panel {

@@ -8,6 +8,8 @@ if "%PORT%"=="" set "PORT=8080"
 set "APP_URL=http://localhost:%PORT%/"
 set "OBS_URL=http://localhost:%PORT%/obs"
 set "TASKLIST_PARENT_PID="
+set "ELECTRON_CMD="
+set "PROJECT_DIR=%APP_DIR%.."
 
 where node >nul 2>nul
 if errorlevel 1 (
@@ -18,6 +20,25 @@ if errorlevel 1 (
 )
 
 cd /d "%APP_DIR%"
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%APP_DIR%update.ps1"
+
+if exist "%APP_DIR%node_modules\.bin\electron.cmd" set "ELECTRON_CMD=%APP_DIR%node_modules\.bin\electron.cmd"
+if "%ELECTRON_CMD%"=="" if exist "%PROJECT_DIR%\node_modules\.bin\electron.cmd" set "ELECTRON_CMD=%PROJECT_DIR%\node_modules\.bin\electron.cmd"
+if "%ELECTRON_CMD%"=="" (
+  where electron >nul 2>nul
+  if not errorlevel 1 set "ELECTRON_CMD=electron"
+)
+
+if not "%ELECTRON_CMD%"=="" (
+  echo Admin app: Electron
+  echo Sync server starts only after pressing Play in the app.
+  echo.
+  "%ELECTRON_CMD%" "%APP_DIR%electron-main.js"
+  goto appclosed
+)
+
+echo Electron is not available. Falling back to browser admin.
 
 for /f %%P in ('powershell -NoProfile -Command "$parent=(Get-CimInstance Win32_Process -Filter \"ProcessId=$PID\").ParentProcessId; Write-Output $parent" 2^>nul') do set "TASKLIST_PARENT_PID=%%P"
 
@@ -33,8 +54,6 @@ if errorlevel 1 (
   exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%APP_DIR%update.ps1"
-
 echo Starting Tasklist server...
 echo Admin URL: %APP_URL%
 echo OBS URL: %OBS_URL%
@@ -48,7 +67,12 @@ echo.
 
 node server.js
 
+:stopped
 echo.
 echo Server stopped or failed to start.
 pause
+endlocal
+exit /b
+
+:appclosed
 endlocal

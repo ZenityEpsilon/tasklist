@@ -14,6 +14,10 @@ const props = defineProps({
   baseProfile: {
     type: Object,
     required: true
+  },
+  embedded: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -245,8 +249,9 @@ function saveDraft() {
 </script>
 
 <template>
-  <section class="program-settings" @click.stop>
+  <section class="program-settings" :class="{ embedded }" @click.stop>
     <button
+      v-if="!embedded"
       class="program-settings-toggle"
       :class="{ open: isOpen }"
       type="button"
@@ -259,7 +264,7 @@ function saveDraft() {
       <span></span>
     </button>
 
-    <div v-if="isOpen" class="program-settings-panel">
+    <div v-if="embedded || isOpen" class="program-settings-panel">
       <div class="settings-toolbar">
         <div class="settings-title">
           <span>Палитра OBS</span>

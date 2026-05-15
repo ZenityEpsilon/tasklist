@@ -11,6 +11,7 @@ import OrdersList from './components/OrdersList.vue';
 const STORAGE_KEY = 'stream-orders-v7';
 const STORAGE_CHANNEL = 'stream-orders-sync-v1';
 const SYNC_POLL_INTERVAL = 1000;
+const SERVER_HEALTH_POLL_INTERVAL = 1000;
 const SERVER_PUSH_DELAY = 120;
 const OVERLAY_COMPLETE_ANIMATION_FALLBACK_MS = 700;
 const TAB_ID = createId();
@@ -18,12 +19,13 @@ const SERVER_SYNC_ENABLED = location.protocol === 'http:' || location.protocol =
 const LOCAL_TAB_SYNC_ENABLED = !SERVER_SYNC_ENABLED;
 const SERVER_STATE_URL = new URL('./api/state', location.href).toString();
 const SERVER_EVENTS_URL = new URL('./api/events', location.href).toString();
+const DESKTOP_API = globalThis.tasklistDesktop || null;
 const params = new URLSearchParams(location.search);
 const viewMode = params.get('view') || params.get('mode') || '';
 const isOverlayMode = viewMode === 'obs'
   || viewMode === 'overlay'
   || location.pathname.replace(/\/$/, '').endsWith('/obs');
-const overlayUrl = new URL('./obs', location.href).toString();
+const overlayUrl = DESKTOP_API?.obsUrl || new URL('./obs', location.href).toString();
 const AUTHOR_NAME = 'Зеновий Крупский';
 const CONTACT_URL = 'https://t.me/zenoviyKrupskyi';
 
@@ -87,6 +89,10 @@ const input = ref('');
 const qtyInput = ref(1);
 const gameInput = ref('');
 const filter = ref('all');
+const adminPage = ref('home');
+const legacyJsonInput = ref(null);
+const isStartingObsSync = ref(false);
+const obsSyncRunning = ref(false);
 const openedPicker = ref(null);
 const draggedId = ref(null);
 const dragOverId = ref(null);
@@ -104,6 +110,8 @@ let lastRawStorage = localStorage.getItem(STORAGE_KEY) || '';
 let syncChannel = null;
 let serverPushTimer = null;
 let serverSyncAvailable = false;
+let serverSyncInFlight = false;
+let serverEvents = null;
 const overlayCompletionTimers = new Map();
 
 const activeGame = computed(() => {
@@ -176,7 +184,7 @@ watch(
 );
 
 setupCrossTabSync();
-setupServerSync();
+setupServerSync({ pushWhenCurrent: true });
 
 function addOrder() {
   const parsed = parseTitle(input.value.trim());
@@ -216,6 +224,51 @@ function setActiveGame(id) {
   activeGameId.value = id;
 }
 
+async function toggleObsSyncServer() {
+  if (isStartingObsSync.value) return;
+
+  if (obsSyncRunning.value) {
+    await stopObsSyncServer();
+    return;
+  }
+
+  if (!selectedGame.value) return;
+
+  setActiveGame(selectedGame.value.id);
+
+  if (!DESKTOP_API?.startSyncServer) return;
+
+  isStartingObsSync.value = true;
+
+  try {
+    const payload = makePayload(nextRevision());
+    lastRawStorage = JSON.stringify(payload);
+    lastRevision = payload.revision;
+    localStorage.setItem(STORAGE_KEY, lastRawStorage);
+    await DESKTOP_API.startSyncServer(JSON.parse(lastRawStorage));
+    obsSyncRunning.value = true;
+  } catch {
+    alert('Не удалось запустить сервер синхронизации');
+  } finally {
+    isStartingObsSync.value = false;
+  }
+}
+
+async function stopObsSyncServer() {
+  if (!DESKTOP_API?.stopSyncServer) return;
+
+  isStartingObsSync.value = true;
+
+  try {
+    await DESKTOP_API.stopSyncServer();
+    obsSyncRunning.value = false;
+  } catch {
+    alert('Не удалось остановить сервер синхронизации');
+  } finally {
+    isStartingObsSync.value = false;
+  }
+}
+
 function finishGameEditing(game) {
   const name = game.name.trim();
   game.name = name || DEFAULT_GAME_NAME;
@@ -253,6 +306,11 @@ function resetTaskUiState() {
 
 function setFilter(value) {
   filter.value = value;
+}
+
+function setAdminPage(page) {
+  adminPage.value = page;
+  closeIconMenus();
 }
 
 function clearDone() {
@@ -376,7 +434,11 @@ function iconPath(iconId) {
   return `${import.meta.env.BASE_URL}icons/${getIcon(iconId).file}`;
 }
 
-function loadJson(event) {
+function openLegacyJsonImport() {
+  legacyJsonInput.value?.click();
+}
+
+function importLegacyJson(event) {
   const file = event.target.files?.[0];
   event.target.value = '';
 
@@ -386,14 +448,15 @@ function loadJson(event) {
 
   reader.onload = () => {
     try {
-      const data = JSON.parse(reader.result);
+      const importedState = parseStoredState(reader.result);
 
-      const importedState = parseStoredState(data);
+      appSettings.value = importedState.appSettings;
       games.value = importedState.games;
       activeGameId.value = importedState.activeGameId;
+      selectedGameId.value = normalizeGameId(selectedGameId.value);
       resetTaskUiState();
     } catch {
-      alert('Не удалось загрузить JSON');
+      alert('Не удалось перенести старый JSON');
     }
   };
 
@@ -488,9 +551,11 @@ function applyRemotePayload(payload) {
   resetTaskUiState();
 }
 
-function setupServerSync() {
+function setupServerSync(options = {}) {
   if (!SERVER_SYNC_ENABLED) return;
+  if (serverSyncInFlight) return;
 
+  serverSyncInFlight = true;
   fetch(SERVER_STATE_URL)
     .then(response => {
       if (!response.ok) {
@@ -503,7 +568,7 @@ function setupServerSync() {
     .then(payload => {
       if (payload.revision > lastRevision) {
         applyRemotePayload(payload);
-      } else {
+      } else if (options.pushWhenCurrent && !isOverlayMode) {
         scheduleServerPush(makePayload(lastRevision));
       }
 
@@ -511,34 +576,63 @@ function setupServerSync() {
     })
     .catch(() => {
       serverSyncAvailable = false;
+      closeServerEvents();
+    })
+    .finally(() => {
+      serverSyncInFlight = false;
     });
 }
 
 function setupServerEvents() {
   if (!serverSyncAvailable || !('EventSource' in globalThis)) return;
+  if (serverEvents) return;
 
-  const events = new EventSource(SERVER_EVENTS_URL);
+  serverEvents = new EventSource(SERVER_EVENTS_URL);
 
-  events.addEventListener('state', event => {
+  serverEvents.addEventListener('state', event => {
     try {
       applyRemotePayload(JSON.parse(event.data));
     } catch {}
   });
 
-  events.onerror = () => {
+  serverEvents.onerror = () => {
     serverSyncAvailable = false;
-    events.close();
+    closeServerEvents();
     setTimeout(setupServerSync, 1500);
   };
 }
 
+function closeServerEvents() {
+  serverEvents?.close();
+  serverEvents = null;
+}
+
+if (SERVER_SYNC_ENABLED) {
+  setInterval(() => setupServerSync(), SERVER_HEALTH_POLL_INTERVAL);
+}
+
 function scheduleServerPush(payload) {
-  if (!SERVER_SYNC_ENABLED) return;
+  const canUseDesktopSync = Boolean(DESKTOP_API?.startSyncServer && obsSyncRunning.value);
+
+  if (!SERVER_SYNC_ENABLED && !canUseDesktopSync) return;
 
   clearTimeout(serverPushTimer);
   serverPushTimer = setTimeout(() => {
-    pushToServer(payload);
+    if (SERVER_SYNC_ENABLED) {
+      pushToServer(payload);
+    } else {
+      pushToDesktopServer(payload);
+    }
   }, SERVER_PUSH_DELAY);
+}
+
+async function pushToDesktopServer(payload) {
+  try {
+    await DESKTOP_API.startSyncServer(payload);
+    obsSyncRunning.value = true;
+  } catch {
+    obsSyncRunning.value = false;
+  }
 }
 
 async function pushToServer(payload) {
@@ -558,48 +652,6 @@ async function pushToServer(payload) {
     serverSyncAvailable = true;
   } catch {
     serverSyncAvailable = false;
-  }
-}
-
-async function saveJson() {
-  try {
-    const json = JSON.stringify(makePayload(Date.now()), null, 2);
-
-    if (window.showSaveFilePicker) {
-      const handle = await window.showSaveFilePicker({
-        suggestedName: 'tasks.json',
-        types: [
-          {
-            description: 'JSON file',
-            accept: {
-              'application/json': ['.json']
-            }
-          }
-        ]
-      });
-
-      const writable = await handle.createWritable();
-      await writable.write(json);
-      await writable.close();
-      return;
-    }
-
-    const blob = new Blob([json], {
-      type: 'application/json;charset=utf-8'
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-
-    link.href = url;
-    link.download = 'tasks.json';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  } catch (error) {
-    if (error.name !== 'AbortError') {
-      alert('Ошибка сохранения файла');
-    }
   }
 }
 
@@ -978,17 +1030,21 @@ function makeDefaultState() {
 </script>
 
 <template>
-  <main class="widget" :class="{ overlay: isOverlayMode }" :style="paletteCssVars" @click="closeIconMenus">
-    <AppHeader
-      v-if="!isOverlayMode"
+  <main
+    class="widget"
+    :class="{ overlay: isOverlayMode, 'admin-shell': !isOverlayMode }"
+    :style="paletteCssVars"
+    @click="closeIconMenus"
+  >
+    <template v-if="!isOverlayMode && adminPage === 'home'">
+      <AppHeader
       :title="currentGame?.name || DEFAULT_GAME_NAME"
       :active-count="activeCount"
       :total-count="totalCount"
       :qty-count="qtyCount"
     />
 
-    <GameTabs
-      v-if="!isOverlayMode"
+      <GameTabs
       :games="games"
       :active-game-id="activeGameId"
       :selected-game-id="selectedGameId"
@@ -1007,12 +1063,12 @@ function makeDefaultState() {
       @drop-game="onGameDrop"
     />
 
-    <OrderForm
-      v-if="!isOverlayMode"
+      <OrderForm
       v-model:input="input"
       v-model:qty-input="qtyInput"
       @add-order="addOrder"
     />
+    </template>
 
     <div v-if="isOverlayMode" class="obs-orders-stage">
       <Transition name="obs-list-page">
@@ -1042,7 +1098,7 @@ function makeDefaultState() {
       </Transition>
     </div>
     <OrdersList
-      v-else
+      v-else-if="adminPage === 'home'"
       :orders="displayOrders"
       :icons="ICONS"
       :show-icons="currentGameSettings.showIcons"
@@ -1065,26 +1121,80 @@ function makeDefaultState() {
       @remove-order="removeOrder"
     />
 
-    <EmptyState :visible="displayOrders.length === 0" />
+    <EmptyState v-if="isOverlayMode || adminPage === 'home'" :visible="displayOrders.length === 0" />
 
     <AppFooter
-      v-if="!isOverlayMode"
+      v-if="!isOverlayMode && adminPage === 'home'"
       :filter="filter"
       :overlay-url="overlayUrl"
-      :author-name="AUTHOR_NAME"
-      :contact-url="CONTACT_URL"
       @set-filter="setFilter"
       @clear-done="clearDone"
-      @load-json="loadJson"
-      @save-json="saveJson"
     />
 
-    <ProgramSettings
-      v-if="!isOverlayMode"
-      :settings="appSettings"
-      :color-fields="PALETTE_FIELDS"
-      :base-profile="makeDefaultColorProfile()"
-      @save-settings="saveAppSettings"
-    />
+    <section v-if="!isOverlayMode && adminPage === 'settings'" class="settings-page">
+      <div class="settings-page-title">
+        <span>Настройки</span>
+        <strong>Профили и палитры</strong>
+      </div>
+
+      <div class="settings-page-actions">
+        <input
+          ref="legacyJsonInput"
+          class="file-input"
+          type="file"
+          accept=".json,application/json"
+          @change="importLegacyJson"
+        />
+        <button class="file-btn" type="button" @click="openLegacyJsonImport">
+          Перенести старый JSON
+        </button>
+        <a class="contact-link" :href="CONTACT_URL" target="_blank" rel="noreferrer">
+          {{ AUTHOR_NAME }}
+        </a>
+      </div>
+
+      <ProgramSettings
+        embedded
+        :settings="appSettings"
+        :color-fields="PALETTE_FIELDS"
+        :base-profile="makeDefaultColorProfile()"
+        @save-settings="saveAppSettings"
+      />
+    </section>
+
   </main>
+
+  <nav v-if="!isOverlayMode" class="bottom-nav" aria-label="Навигация">
+    <button
+      class="bottom-nav-item"
+      :class="{ active: adminPage === 'home' }"
+      type="button"
+      title="Главная"
+      aria-label="Главная"
+      @click="setAdminPage('home')"
+    >
+      <span aria-hidden="true">⌂</span>
+    </button>
+    <button
+      class="bottom-nav-item play"
+      :class="{ 'server-on': obsSyncRunning, 'server-off': !obsSyncRunning }"
+      type="button"
+      :disabled="(!selectedGame && !obsSyncRunning) || isStartingObsSync"
+      :title="obsSyncRunning ? 'Остановить синхронизацию OBS' : 'Запустить синхронизацию OBS'"
+      :aria-label="obsSyncRunning ? 'Остановить синхронизацию OBS' : 'Запустить синхронизацию OBS'"
+      @click="toggleObsSyncServer"
+    >
+      <span class="play-icon" :class="{ stop: obsSyncRunning }" aria-hidden="true"></span>
+    </button>
+    <button
+      class="bottom-nav-item"
+      :class="{ active: adminPage === 'settings' }"
+      type="button"
+      title="Настройки"
+      aria-label="Настройки"
+      @click="setAdminPage('settings')"
+    >
+      <span aria-hidden="true">⚙</span>
+    </button>
+  </nav>
 </template>

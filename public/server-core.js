@@ -1,0 +1,380 @@
+import { createReadStream, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { extname, join, normalize, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const defaultRoot = fileURLToPath(new URL('.', import.meta.url));
+const defaultColorProfiles = [
+  {
+    id: 'default-cyan',
+    name: 'Стандартная',
+    colors: {
+      panel: 'rgba(6, 10, 18, 0.74)',
+      panelStrong: 'rgba(8, 13, 24, 0.9)',
+      panelSoft: 'rgba(16, 24, 38, 0.72)',
+      line: 'rgba(255, 255, 255, 0.18)',
+      lineStrong: 'rgba(255, 255, 255, 0.28)',
+      text: '#ffffff',
+      muted: '#c7d2e2',
+      shadow: 'rgba(0, 0, 0, 0.7)',
+      accent: '#38d5ff',
+      accent2: '#a7f3d0',
+      danger: '#ff6b7d',
+      done: '#38ef7d'
+    }
+  }
+];
+const paletteKeys = Object.keys(defaultColorProfiles[0].colors);
+
+const mimeTypes = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.otf': 'font/otf'
+};
+
+export function startTasklistServer(options = {}) {
+  const root = options.root || defaultRoot;
+  const statePath = options.statePath || join(root, 'sync-state.json');
+  const port = Number(options.port || process.env.PORT || 8080);
+  const launcherPid = Number(options.launcherPid || 0);
+  const clients = new Set();
+  let state = loadState(statePath);
+
+  if (options.initialState) {
+    state = parsePayload(options.initialState);
+    saveState(statePath, state);
+  }
+
+  const server = createServer((request, response) => {
+    const url = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+
+    if (url.pathname === '/api/state') {
+      handleState(request, response);
+      return;
+    }
+
+    if (url.pathname === '/api/events') {
+      handleEvents(request, response);
+      return;
+    }
+
+    if (url.pathname === '/obs/') {
+      response.writeHead(302, { Location: '/obs' });
+      response.end();
+      return;
+    }
+
+    serveStatic(root, url.pathname, response);
+  });
+
+  const listenPromise = new Promise((resolveListen, rejectListen) => {
+    server.once('error', rejectListen);
+    server.listen(port, () => {
+      server.off('error', rejectListen);
+      resolveListen();
+    });
+  });
+
+  let launcherWatch = null;
+
+  if (launcherPid > 0) {
+    launcherWatch = setInterval(() => {
+      try {
+        process.kill(launcherPid, 0);
+      } catch {
+        shutdown(0);
+      }
+    }, 1500);
+    launcherWatch.unref();
+  }
+
+  function shutdown(exitCode = 0) {
+    clients.forEach(client => client.end());
+    clearInterval(launcherWatch);
+    server.close(() => {
+      if (options.exitOnClose) {
+        process.exit(exitCode);
+      }
+    });
+
+    if (options.exitOnClose) {
+      setTimeout(() => {
+        process.exit(exitCode);
+      }, 1000).unref();
+    }
+  }
+
+  function handleState(request, response) {
+    if (request.method === 'GET') {
+      sendJson(response, state);
+      return;
+    }
+
+    if (request.method !== 'POST') {
+      response.writeHead(405, { Allow: 'GET, POST' });
+      response.end();
+      return;
+    }
+
+    readBody(request)
+      .then(body => {
+        const payload = parsePayload(JSON.parse(body));
+
+        if (payload.revision >= state.revision) {
+          payload.revision = Math.max(payload.revision, state.revision + 1);
+          state = payload;
+          saveState(statePath, state);
+          broadcastState(clients, state);
+        }
+
+        sendJson(response, state);
+      })
+      .catch(error => {
+        sendJson(response, { error: error.message }, 400);
+      });
+  }
+
+  function handleEvents(request, response) {
+    if (request.method !== 'GET') {
+      response.writeHead(405, { Allow: 'GET' });
+      response.end();
+      return;
+    }
+
+    response.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+
+    clients.add(response);
+    writeEvent(response, state);
+
+    const keepAlive = setInterval(() => {
+      response.write(': keep-alive\n\n');
+    }, 25000);
+
+    request.on('close', () => {
+      clearInterval(keepAlive);
+      clients.delete(response);
+    });
+  }
+
+  return {
+    close: shutdown,
+    obsUrl: `http://localhost:${port}/obs`,
+    port,
+    ready: listenPromise,
+    updateState(payload) {
+      const nextState = parsePayload(payload);
+      nextState.revision = Math.max(nextState.revision, state.revision + 1);
+      state = nextState;
+      saveState(statePath, state);
+      broadcastState(clients, state);
+      return state;
+    },
+    url: `http://localhost:${port}/`
+  };
+}
+
+function serveStatic(root, pathname, response) {
+  const requestedPath = pathname === '/' || pathname === '/obs'
+    ? '/index.html'
+    : decodeURIComponent(pathname);
+  const filePath = normalize(resolve(root, `.${requestedPath}`));
+
+  if (!filePath.startsWith(normalize(root))) {
+    response.writeHead(403);
+    response.end('Forbidden');
+    return;
+  }
+
+  if (!existsSync(filePath)) {
+    response.writeHead(404);
+    response.end('Not found');
+    return;
+  }
+
+  response.writeHead(200, {
+    'Content-Type': mimeTypes[extname(filePath)] || 'application/octet-stream',
+    'Cache-Control': 'no-cache'
+  });
+
+  createReadStream(filePath).pipe(response);
+}
+
+function readBody(request) {
+  return new Promise((resolveBody, rejectBody) => {
+    let body = '';
+
+    request.setEncoding('utf8');
+    request.on('data', chunk => {
+      body += chunk;
+
+      if (body.length > 1024 * 1024) {
+        rejectBody(new Error('Request body is too large'));
+        request.destroy();
+      }
+    });
+    request.on('end', () => resolveBody(body));
+    request.on('error', rejectBody);
+  });
+}
+
+function parsePayload(payload) {
+  if (!payload) {
+    throw new Error('Payload must contain state');
+  }
+
+  if (Array.isArray(payload.games)) {
+    const games = payload.games
+      .filter(game => game && typeof game === 'object')
+      .map((game, index) => ({
+        id: game.id || `game-${index + 1}`,
+        name: String(game.name || `Game ${index + 1}`),
+        settings: normalizeGameSettings(game.settings),
+        orders: Array.isArray(game.orders) ? game.orders : []
+      }));
+
+    if (games.length === 0) {
+      throw new Error('Payload must contain at least one game');
+    }
+
+    return {
+      version: 4,
+      sourceId: payload.sourceId || 'server',
+      revision: Number(payload.revision) || Date.now(),
+      appSettings: normalizeAppSettings(payload.appSettings),
+      games,
+      activeGameId: games.some(game => game.id === payload.activeGameId)
+        ? payload.activeGameId
+        : games[0].id
+    };
+  }
+
+  if (!Array.isArray(payload.orders)) {
+    throw new Error('Payload must contain games or orders array');
+  }
+
+  return {
+    version: 4,
+    sourceId: payload.sourceId || 'server',
+    revision: Number(payload.revision) || Date.now(),
+    appSettings: normalizeAppSettings(payload.appSettings),
+    games: [
+      {
+        id: 'default-game',
+        name: 'Игра',
+        settings: normalizeGameSettings(),
+        orders: payload.orders
+      }
+    ],
+    activeGameId: 'default-game'
+  };
+}
+
+function loadState(statePath) {
+  try {
+    if (existsSync(statePath)) {
+      return parsePayload(JSON.parse(readFileSync(statePath, 'utf8')));
+    }
+  } catch {}
+
+  return {
+    version: 4,
+    sourceId: 'server',
+    revision: 0,
+    appSettings: normalizeAppSettings(),
+    games: [
+      {
+        id: 'default-game',
+        name: 'Игра',
+        settings: normalizeGameSettings(),
+        orders: []
+      }
+    ],
+    activeGameId: 'default-game'
+  };
+}
+
+function normalizeGameSettings(settings = {}) {
+  const colorProfileId = typeof settings?.colorProfileId === 'string' ? settings.colorProfileId : '';
+
+  return {
+    colorProfileId,
+    showIcons: Boolean(settings?.showIcons)
+  };
+}
+
+function normalizeAppSettings(settings = {}) {
+  const defaults = makeDefaultAppSettings();
+  const profiles = Array.isArray(settings?.colorProfiles)
+    ? settings.colorProfiles.map(normalizeColorProfile).filter(profile => profile.name)
+    : [];
+  const colorProfiles = profiles.length > 0 ? profiles : defaults.colorProfiles;
+  const activeColorProfileId = colorProfiles.some(profile => profile.id === settings?.activeColorProfileId)
+    ? settings.activeColorProfileId
+    : colorProfiles[0].id;
+  const adminColorProfileId = colorProfiles.some(profile => profile.id === settings?.adminColorProfileId)
+    ? settings.adminColorProfileId
+    : '';
+
+  return {
+    activeColorProfileId,
+    adminColorProfileId,
+    colorProfiles
+  };
+}
+
+function makeDefaultAppSettings() {
+  const colorProfiles = defaultColorProfiles.map(normalizeColorProfile);
+
+  return {
+    activeColorProfileId: colorProfiles[0].id,
+    adminColorProfileId: '',
+    colorProfiles
+  };
+}
+
+function normalizeColorProfile(profile = {}, index = 0) {
+  const fallback = defaultColorProfiles[0];
+  const sourceColors = profile.colors && typeof profile.colors === 'object' ? profile.colors : {};
+  const colors = {};
+
+  paletteKeys.forEach(key => {
+    colors[key] = String(sourceColors[key] || fallback.colors[key] || '').trim();
+  });
+
+  return {
+    id: profile.id || `profile-${Date.now()}-${index}`,
+    name: String(profile.name || fallback.name || 'Палитра').trim(),
+    colors
+  };
+}
+
+function saveState(statePath, state) {
+  writeFileSync(statePath, JSON.stringify(state, null, 2));
+}
+
+function broadcastState(clients, state) {
+  clients.forEach(client => writeEvent(client, state));
+}
+
+function writeEvent(response, payload) {
+  response.write(`event: state\n`);
+  response.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function sendJson(response, payload, status = 200) {
+  response.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-cache'
+  });
+  response.end(JSON.stringify(payload));
+}

@@ -10,20 +10,16 @@ Tasklist is a local stream overlay tool for managing orders, requests, or tasks 
 - Quantity counters, completion state, and quick unit icons.
 - Per-game display settings, including icon visibility.
 - Color profiles for OBS, individual games, and the admin panel.
-- Automatic synchronization between the admin panel and OBS through a local server.
-- Local state persistence with JSON import and export.
+- Electron-based admin app that can run without a console window or sync server.
+- OBS synchronization server starts only when you press Play.
+- Local state persistence in the user's application data folder.
 
 ## Quick Start
 
-1. Install Node.js 18 or newer.
-2. Open the application folder.
-3. Run `start.cmd`.
+1. Download and unpack the latest `tasklist-*.zip` release.
+2. Run `Tasklist.exe`.
 
-The admin panel opens at:
-
-```text
-http://localhost:8080/
-```
+The admin panel opens as a desktop app without a console window. It does not start the OBS synchronization server until you press Play in the bottom navigation.
 
 Use this URL for the OBS browser source:
 
@@ -31,14 +27,28 @@ Use this URL for the OBS browser source:
 http://localhost:8080/obs
 ```
 
-Keep the `start.cmd` window open while using the app.
+After pressing Play, the selected game becomes live and the local sync server starts for OBS.
+
+For source builds, install Node.js 18 or newer and run `start.cmd` from the built application folder. If Electron is not available, `start.cmd` falls back to the browser admin page:
+
+```text
+http://localhost:8080/
+```
+
+Tasklist saves your games, tasks, and color profiles automatically on this computer. Manual import/export is not needed for normal use.
+
+For source builds, you can also start the Electron admin app with:
+
+```cmd
+npm run electron
+```
 
 ## OBS Setup
 
 1. Add a `Browser` source in OBS.
 2. Paste `http://localhost:8080/obs`.
 3. Set the source size you need for your scene.
-4. Manage tasks from the admin panel.
+4. Press Play in the admin app to start synchronization.
 
 Changes made in the admin panel are sent to OBS automatically.
 
