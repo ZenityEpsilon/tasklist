@@ -7,6 +7,7 @@ set "PORT=%PORT%"
 if "%PORT%"=="" set "PORT=8080"
 set "APP_URL=http://localhost:%PORT%/"
 set "OBS_URL=http://localhost:%PORT%/obs"
+set "CHAT_URL=http://localhost:%PORT%/chat"
 set "TASKLIST_PARENT_PID="
 set "ELECTRON_CMD="
 set "PROJECT_DIR=%APP_DIR%.."
@@ -57,6 +58,7 @@ if errorlevel 1 (
 echo Starting Tasklist server...
 echo Admin URL: %APP_URL%
 echo OBS URL: %OBS_URL%
+echo Chat URL: %CHAT_URL%
 
 start "" /min powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 1; Start-Process '%APP_URL%'"
 

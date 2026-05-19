@@ -30,6 +30,14 @@ const expandedProfileIds = ref(new Set());
 const selectedProfileId = ref(props.settings.activeColorProfileId);
 const draftSettings = ref(cloneSettings(props.settings));
 const isSavingDraft = ref(false);
+const CHAT_COLOR_FIELDS = [
+  { key: 'backgroundFrom', label: 'Фон от' },
+  { key: 'backgroundTo', label: 'Фон до' },
+  { key: 'border', label: 'Граница' },
+  { key: 'author', label: 'Ник' },
+  { key: 'text', label: 'Сообщение' }
+];
+const CHAT_SIZE_OPTIONS = Array.from({ length: 13 }, (_, index) => index + 12);
 const isDirty = computed(() => {
   return JSON.stringify(draftSettings.value) !== JSON.stringify(props.settings);
 });
@@ -83,7 +91,44 @@ function toggleProfileExpanded(id) {
 }
 
 function cloneSettings(settings) {
-  return JSON.parse(JSON.stringify(settings));
+  const cloned = JSON.parse(JSON.stringify(settings));
+
+  if (Array.isArray(cloned.colorProfiles)) {
+    cloned.colorProfiles = cloned.colorProfiles.map(normalizeDraftProfile);
+    return cloned;
+  }
+
+  if (cloned && typeof cloned === 'object' && cloned.colors) {
+    return normalizeDraftProfile(cloned);
+  }
+
+  return cloned;
+}
+
+function normalizeDraftProfile(profile) {
+  return {
+    ...profile,
+    colors: { ...(profile?.colors || {}) },
+    chat: cloneChatSettings(profile?.chat)
+  };
+}
+
+function cloneChatSettings(chat) {
+  const fallback = props.baseProfile.chat || {};
+  const fallbackColors = fallback.colors || {};
+  const sourceColors = chat?.colors && typeof chat.colors === 'object' ? chat.colors : {};
+
+  return {
+    colors: {
+      backgroundFrom: sourceColors.backgroundFrom || fallbackColors.backgroundFrom || '',
+      backgroundTo: sourceColors.backgroundTo || fallbackColors.backgroundTo || '',
+      border: sourceColors.border || fallbackColors.border || '',
+      author: sourceColors.author || fallbackColors.author || '',
+      text: sourceColors.text || fallbackColors.text || ''
+    },
+    fontSize: normalizeChatSize(chat?.fontSize, fallback.fontSize || 14),
+    lineSize: normalizeChatSize(chat?.lineSize, fallback.lineSize || 20)
+  };
 }
 
 function createId() {
@@ -153,7 +198,8 @@ function createProfile() {
   const profile = {
     id: createId(),
     name: uniqueProfileName('Новая палитра'),
-    colors: { ...source.colors }
+    colors: { ...source.colors },
+    chat: cloneChatSettings(source.chat)
   };
 
   draftSettings.value.colorProfiles.push(profile);
@@ -167,7 +213,8 @@ function duplicateProfile(id) {
   const profile = {
     id: createId(),
     name: uniqueProfileName(`${source.name} копия`),
-    colors: { ...source.colors }
+    colors: { ...source.colors },
+    chat: cloneChatSettings(source.chat)
   };
 
   draftSettings.value.colorProfiles.push(profile);
@@ -203,6 +250,24 @@ function updateName(profile, event) {
 
 function updateColor(profile, key, value) {
   profile.colors[key] = String(value || '').trim();
+}
+
+function updateChatColor(profile, key, value) {
+  profile.chat = cloneChatSettings(profile.chat);
+  profile.chat.colors[key] = String(value || '').trim();
+}
+
+function updateChatSize(profile, key, value) {
+  profile.chat = cloneChatSettings(profile.chat);
+  profile.chat[key] = normalizeChatSize(value, props.baseProfile.chat?.[key] || 14);
+}
+
+function normalizeChatSize(value, fallback) {
+  const size = Number(value);
+
+  if (!Number.isFinite(size)) return fallback;
+
+  return Math.min(24, Math.max(12, Math.round(size)));
 }
 
 function resetDraft() {
@@ -377,6 +442,7 @@ function saveDraft() {
             </label>
 
             <div class="palette-grid">
+              <div class="profile-section-title">Задачи</div>
               <ColorPicker
                 v-for="field in colorFields"
                 :key="field.key"
@@ -384,6 +450,41 @@ function saveDraft() {
                 :model-value="profile.colors[field.key]"
                 @update:model-value="updateColor(profile, field.key, $event)"
               />
+            </div>
+
+            <div class="palette-grid chat-palette-grid">
+              <div class="profile-section-title">Чат</div>
+              <ColorPicker
+                v-for="field in CHAT_COLOR_FIELDS"
+                :key="field.key"
+                :label="field.label"
+                :model-value="profile.chat.colors[field.key]"
+                @update:model-value="updateChatColor(profile, field.key, $event)"
+              />
+
+              <label class="profile-size-field">
+                <span>Размер текста</span>
+                <select
+                  :value="profile.chat.fontSize"
+                  @change="updateChatSize(profile, 'fontSize', $event.target.value)"
+                >
+                  <option v-for="size in CHAT_SIZE_OPTIONS" :key="`font-${size}`" :value="size">
+                    {{ size }} px
+                  </option>
+                </select>
+              </label>
+
+              <label class="profile-size-field">
+                <span>Размер строки</span>
+                <select
+                  :value="profile.chat.lineSize"
+                  @change="updateChatSize(profile, 'lineSize', $event.target.value)"
+                >
+                  <option v-for="size in CHAT_SIZE_OPTIONS" :key="`line-${size}`" :value="size">
+                    {{ size }} px
+                  </option>
+                </select>
+              </label>
             </div>
           </div>
         </div>
